@@ -1,0 +1,16 @@
+{
+    "cSpell.enabled": false,
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": true,
+    "python.linting.enabled": true,
+    "python.linting.mypyEnabled": true,
+    "python.linting.pylintArgs": [
+        "--max-line-length=120"
+    ],
+    "python.linting.flake8Args": [
+        "--max-line-length=120"
+    ],
+    "python.linting.mypyArgs": [
+        "--max-line-length=120"
+    ],
+}

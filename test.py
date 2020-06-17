@@ -1,7 +1,7 @@
 import unittest
-import torch
 
-from integrable_program import TegIntegral, TegVariable, TegConditional
+from integrable_program import TegIntegral, TegVariable, TegConditional, TegConstant
+from deriv import deriv
 
 
 class TestArithmetic(unittest.TestCase):
@@ -72,16 +72,17 @@ class TestIntegrations(unittest.TestCase):
 
 class TestNestedIntegrals(unittest.TestCase):
 
-    def test_nested_integrals_with_variable_bounds(self):
-        a, b = -1, 1
-        x = TegVariable("x")
-        t = TegVariable("t")
-        a = TegVariable("a", a)
-        b = TegVariable("b", b)
-        # \int_-1^1 \int_{t}^{t+1} xt dx dt
-        body = TegIntegral(t, t + b, x * t, x)
-        integral = TegIntegral(a, b, body, t)
-        self.assertAlmostEqual(integral.eval(100), 2 / 3, places=3)
+    # TODO 
+    # def test_nested_integrals_with_variable_bounds(self):
+    #     a, b = -1, 1
+    #     x = TegVariable("x")
+    #     t = TegVariable("t")
+    #     a = TegVariable("a", a)
+    #     b = TegVariable("b", b)
+    #     # \int_-1^1 \int_{t}^{t+1} xt dx dt
+    #     body = TegIntegral(t, t + b, x * t, x)
+    #     integral = TegIntegral(a, b, body, t)
+    #     self.assertAlmostEqual(integral.eval(100), 2 / 3, places=3)
 
     def test_nested_integrals_same_variable(self):
         a, b = 0, 1
@@ -103,7 +104,7 @@ class TestNestedIntegrals(unittest.TestCase):
         body = TegIntegral(a, b, t, t)
         integral = TegIntegral(a, b, x * body, x)
         self.assertAlmostEqual(integral.eval(), 0.25, places=3)
-    
+
     def test_integral_with_integral_in_bounds(self):
         a, b = 0, 1
         x = TegVariable("x")
@@ -167,37 +168,96 @@ class TestConditionals(unittest.TestCase):
 class TestDerivatives(unittest.TestCase):
 
     def test_deriv_basics(self):
-        x = TegVariable("x", torch.tensor(1., requires_grad=True))
-        y = x + x
-        y.eval()
-        y.backward()
-        self.assertEqual(float(x.grad), 2)
+        x = TegVariable("x", 1)
+        f = x + x
+        deriv_expr = deriv(f, {'x': 1})
+        # df(x=1)/dx
+        self.assertEqual(deriv_expr.eval(), 2)
 
-        # Wipe the old gradient.
-        x.value.grad = None
-        y = x * x
-        y.eval(ignore_cache=True)
-        y.backward()
-        self.assertEqual(float(x.grad), 2)
+        f = x * x
+        # df(x=1)/dx
+        deriv_expr = deriv(f, {'x': 1})
+        self.assertEqual(deriv_expr.eval(), 2)
 
-    # def test_deriv_integral(self):
-    #     a = TegVariable("a", -1)
-    #     b = TegVariable("b", 1)
+    def test_deriv_poly(self):
+        x = TegVariable("x", 1)
+        c1 = TegConstant(1)
+        c2 = TegConstant(3)
+        f = c1 * x**3 + c2 * x**2 + c2 * x + c1
+        # df(x=1)/dx
+        deriv_expr = deriv(f, {'x': 1})
+        self.assertEqual(deriv_expr.eval(), 12)
 
-    #     x = TegVariable("x")
-    #     theta = TegVariable("theta", torch.tensor(1., requires_grad=True))
-    #     y = TegIntegral(a, b, x * theta, x)
+        deriv_expr = deriv(f, {'x': 1})
+        deriv_expr.bind_variable('x', -1)
+        # df(x=-1)/dx
+        self.assertEqual(deriv_expr.eval(ignore_cache=True), 0)
 
-    #     # deriv(int_{a=-1}^{1} x*theta dx)
-    #     y.eval(ignore_cache=True)
-    #     y.backward()
+    def test_deriv_branch(self):
+        # a = TegConstant(0)
+        b = TegConstant(1)
 
+        x = TegVariable('x')
+        theta = TegVariable('theta', 1)
+        f = TegConditional(x, 0, theta, theta * theta)
+
+        deriv_expr = deriv(f, {'theta': 1})
+        x.bind_variable('x', 1)
+        # deriv(int_{a=0}^{1} x*theta dx)
+        self.assertAlmostEqual(deriv_expr.eval(), 2)
+
+        x.bind_variable('x', -1)
+        self.assertAlmostEqual(deriv_expr.eval(ignore_cache=True), 1)
+
+    def test_deriv_integral(self):
+        a = TegVariable("a", 0)
+        b = TegVariable("b", 1)
+
+        x = TegVariable("x")
+        theta = TegVariable("theta", 5)
+        f = TegIntegral(a, b, x * theta, x)
+
+        deriv_expr = deriv(f, {'theta': 1})
+
+        # deriv(int_{a=0}^{1} x*theta dx)
+        self.assertAlmostEqual(deriv_expr.eval(), 0.5)
+
+    def test_deriv_integral_branch_poly(self):
+        a = TegConstant(name="a", value=0)
+        b = TegConstant(name="b", value=1)
+
+        theta1 = TegVariable("theta1", -1)
+        theta2 = TegVariable("theta2", 1)
+        # g = \int_a^b if(x<0.5) x*theta1 else 1 dx
+        # h = \int_a^b x*theta2 + x^2theta1^2 dx
+        x = TegVariable("x")
+        body = TegConditional(x, 0.5, x * theta1, b)
+        g = TegIntegral(a, b, body, x)
+        h = TegIntegral(a, b, x * theta2 + x**2 * theta1**2, x)
+
+        y = TegVariable("y", 0)
+        # if(y < 1) g else h
+        f = TegConditional(y, 1, g, h)
+
+        # df/d(theta1)
+        deriv_expr = deriv(f, {'theta1': 1, 'theta2': 0})
+        self.assertAlmostEqual(deriv_expr.eval(), 0.125, places=3)
+
+        # df/d(theta2)
+        deriv_expr = deriv(f, {'theta1': 0, 'theta2': 1})
+        self.assertAlmostEqual(deriv_expr.eval(ignore_cache=True), 0)
+
+        f.bind_variable("y", 2)
+        deriv_expr = deriv(f, {'theta1': 1, 'theta2': 0})
+        self.assertAlmostEqual(deriv_expr.eval(ignore_cache=True), -2/3, places=3)
+
+        deriv_expr = deriv(f, {'theta1': 0, 'theta2': 1})
+        self.assertAlmostEqual(deriv_expr.eval(ignore_cache=True), 1/2, places=3)
+        
 
 # TODO: Implement derivatives
 # deriv (\int_-1^1 \int_{t}^{t+1} xt dx dt) x
 # deriv (\int_-1^1 \int_{t}^{t+1} xt dx dt) t
-
-# Maybe use nn.Module rather than jerry-rigging gradients
 
 
 if __name__ == '__main__':

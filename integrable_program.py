@@ -1,7 +1,5 @@
-from typing import *
-import torch
+from typing import Optional
 import operator
-import torch.nn as nn
 import numpy as np
 
 
@@ -25,6 +23,13 @@ class Teg:
     def __rmul__(self, other):
         return other * self
 
+    def __pow__(self, exp):
+        if exp == 0:
+            return TegConstant(1)
+        # TODO: this is naive linear, could be log. Also, should support more.
+        assert isinstance(exp, int) and exp > 0, "We only support positive integer powers."
+        return self * self**(exp - 1)
+
     def __iter__(self):
         yield self
         yield from (node for child in self.children for node in child)
@@ -42,41 +47,30 @@ class Teg:
             self.value = self.sign * self.operation(*[child.eval(num_samples, ignore_cache) for child in self.children])
         return self.value
 
-    # def forward(self, num_samples=50, ignore_cache=False):
-    #     return self.eval(num_samples, ignore_cache)
-
-    def bind_variable(self, var_name: str, value: float) -> None:
+    def bind_variable(self, var_name: str, value: Optional[float]) -> None:
         [child.bind_variable(var_name, value) for child in self.children]
 
     def unbind_variable(self, var_name: str) -> None:
         self.bind_variable(var_name, None)
 
-    def backward(self):
-        self.value.backward()
-
-    @property
-    def grad(self):
-        return self.value.grad
-
 
 class TegVariable(Teg):
 
-    def __init__(self, name: str, value: float = None, sign: int = 1):
+    def __init__(self, name: str, value: Optional[float] = None, sign: int = 1):
         super(TegVariable, self).__init__(children=[], sign=sign)
         self.name = name
         self.value = value
 
     def __add__(self, other):
-        return TegAdd([self.clone(), other])
+        return TegAdd([self, other])
 
     def __mul__(self, other):
-        return TegMul([self.clone(), other])
-
-    def clone(self):
-        return TegVariable(self.name, self.value, self.sign)
+        return TegMul([self, other])
 
     def __lt__(self, other):
-        return self.value < other
+        if isinstance(other, (float, int)):
+            other = TegConstant(other)
+        return self.value < other.value
 
     def __iter__(self):
         yield self
@@ -95,9 +89,29 @@ class TegVariable(Teg):
         assert self.value is not None, f'The variable "{self.name}" must be bound to a value prior to evaluation.'
         return self.sign * self.value
 
-    def bind_variable(self, var_name: str, value: float) -> None:
+    def bind_variable(self, var_name: str, value: Optional[float]) -> None:
         if self.name == var_name:
             self.value = value
+
+
+class TegConstant(TegVariable):
+
+    def __init__(self, value: Optional[float], name: str = '', sign: int = 1):
+        super(TegConstant, self).__init__(name='', value=value, sign=sign)
+        self.value = value
+        self.name = name
+
+    def __str__(self):
+        return f'{"-" if self.sign == -1 else ""}{"" if not self.name else f"{self.name}="}{self.value}'
+
+    def __repr__(self):
+        return f'TegConstant(value={self.value}, name={self.name}, sign={self.sign})'
+
+    def eval(self, num_samples=50, ignore_cache=False) -> float:
+        return self.sign * self.value
+
+    def bind_variable(self, var_name: str, value: Optional[float]) -> None:
+        pass
 
 
 class TegAdd(Teg):
@@ -113,7 +127,7 @@ class TegMul(Teg):
 class TegIntegral(Teg):
     name = "integral"
 
-    def __init__(self, lower: Teg, upper: Teg, body: Teg, dvar: TegVariable):
+    def __init__(self, lower: TegConstant, upper: TegConstant, body: Teg, dvar: TegVariable):
         super(TegIntegral, self).__init__(children=[lower, upper, body, dvar])
         self.lower = lower
         self.upper = upper
@@ -126,16 +140,12 @@ class TegIntegral(Teg):
     def __iter__(self):
         yield self
 
-    def bind_variable(self, var_name: str, value: float):
-        # If the integration variable is the same as the variable being bound
-        # bind the variable in the bounds and leave the body alone.
+    def bind_variable(self, var_name: str, value: Optional[float]):
+        # assert self.dvar.name == var_name, (f'The name variable for the infinitesimal "{self.dvar.name}" '
+                                            # f'should be different than the variable "{var_name}" that is bound.')
         self.lower.bind_variable(var_name, value)
         self.upper.bind_variable(var_name, value)
-
-        # Otherwise, bind the body and dump the cache (since a value changed) 
-        if self.dvar.name != var_name:
-            self.body.bind_variable(var_name, value)
-            self.value = None
+        self.body.bind_variable(var_name, value)
 
     def eval(self, num_samples=50, ignore_cache=False) -> float:
         if self.value is None or ignore_cache:
@@ -165,7 +175,7 @@ class TegIntegral(Teg):
 class TegConditional(Teg):
     name = 'conditional'
 
-    def __init__(self, var: TegVariable, const: TegVariable, if_body: Teg, else_body: Teg):
+    def __init__(self, var: TegVariable, const: TegConstant, if_body: Teg, else_body: Teg):
         super(TegConditional, self).__init__(children=[var, const, if_body, else_body])
         self.var = var
         self.const = const
@@ -178,7 +188,7 @@ class TegConditional(Teg):
     def __iter__(self):
         yield self
 
-    def bind_variable(self, var_name: str, value: float):
+    def bind_variable(self, var_name: str, value: Optional[float]):
         self.var.bind_variable(var_name, value)
         self.if_body.bind_variable(var_name, value)
         self.else_body.bind_variable(var_name, value)
@@ -190,3 +200,8 @@ class TegConditional(Teg):
             else:
                 self.value = self.else_body.eval(num_samples, ignore_cache)
         return self.value
+
+
+# TODO: Create functions for proper closure under derivative due to introduced infinitesimals
+# class TegFunction(Teg):
+#     name = 'function'
