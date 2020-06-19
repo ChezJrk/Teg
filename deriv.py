@@ -70,7 +70,7 @@ def deriv(expr: Teg, bindings: Dict[str, float]) -> Teg:
         bindings: A mapping from variable names to the values of corresponding infinitesimals.
 
     Returns:
-        Teg: The derivative expression.
+        Teg: The forward derivative expression.
     """
 
     # After deriv_transform, expr will have unbound infinitesimals

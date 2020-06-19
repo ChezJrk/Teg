@@ -202,6 +202,13 @@ class TegConditional(Teg):
         return self.value
 
 
+# class TegTuple(Teg):
+
+#     def __init__(self, *args):
+#         super(TegConditional, self).__init__(children=args)
+
+
+
 # TODO: Create functions for proper closure under derivative due to introduced infinitesimals
 # class TegFunction(Teg):
 #     name = 'function'
