@@ -41,7 +41,7 @@ class Teg:
     def __neg__(self):
         return type(self)(children=self.children, sign=self.sign*-1)
 
-    def eval(self, num_samples=50, ignore_cache=False) -> float:
+    def eval(self, num_samples: int = 50, ignore_cache: bool = False) -> float:
         if self.value is None or ignore_cache:
             # Cache results as you go
             self.value = self.sign * self.operation(*[child.eval(num_samples, ignore_cache) for child in self.children])
@@ -85,7 +85,7 @@ class TegVariable(Teg):
     def __neg__(self):
         return type(self)(name=self.name, value=self.value, sign=self.sign*-1)
 
-    def eval(self, num_samples=50, ignore_cache=False) -> float:
+    def eval(self, num_samples: int = 50, ignore_cache: bool = False) -> float:
         assert self.value is not None, f'The variable "{self.name}" must be bound to a value prior to evaluation.'
         return self.sign * self.value
 
@@ -107,7 +107,7 @@ class TegConstant(TegVariable):
     def __repr__(self):
         return f'TegConstant(value={self.value}, name={self.name}, sign={self.sign})'
 
-    def eval(self, num_samples=50, ignore_cache=False) -> float:
+    def eval(self, num_samples: int = 50, ignore_cache: bool = False) -> float:
         return self.sign * self.value
 
     def bind_variable(self, var_name: str, value: Optional[float]) -> None:
@@ -147,7 +147,7 @@ class TegIntegral(Teg):
         self.upper.bind_variable(var_name, value)
         self.body.bind_variable(var_name, value)
 
-    def eval(self, num_samples=50, ignore_cache=False) -> float:
+    def eval(self, num_samples: int = 50, ignore_cache: bool = False) -> float:
         if self.value is None or ignore_cache:
             lower = self.lower.eval(num_samples, ignore_cache)
             upper = self.upper.eval(num_samples, ignore_cache)
@@ -156,19 +156,24 @@ class TegIntegral(Teg):
             self.dvar.value = None
 
             # Sample different values of the variable (dvar) and evaluate
-            # Currently do NON-DIFFERENTIABLE uniform sampling 
+            # Currently do NON-DIFFERENTIABLE uniform sampling
             def compute_samples(var_sample):
                 self.body.bind_variable(self.dvar.name, var_sample)
                 val = self.body.eval(num_samples, ignore_cache=True)
                 return val
 
             var_samples, step = np.linspace(lower, upper, num_samples, retstep=True)
-            body_at_samples = np.vectorize(compute_samples)(var_samples)
+
+            # Hacky way to handle integrals of vectors
+            try:
+                body_at_samples = np.vectorize(compute_samples)(var_samples)
+            except ValueError:
+                body_at_samples = np.vectorize(compute_samples, signature='()->(n)')(var_samples)
 
             # Trapezoidal rule
             y_left = body_at_samples[:-1]  # left endpoints
             y_right = body_at_samples[1:]  # right endpoints
-            self.value = sign * (step / 2) * np.sum(y_left + y_right)
+            self.value = sign * (step / 2) * np.sum(y_left + y_right, 0)
         return self.value
 
 
@@ -193,7 +198,7 @@ class TegConditional(Teg):
         self.if_body.bind_variable(var_name, value)
         self.else_body.bind_variable(var_name, value)
 
-    def eval(self, num_samples=50, ignore_cache=False) -> float:
+    def eval(self, num_samples: int = 50, ignore_cache: bool = False) -> float:
         if self.value is None or ignore_cache:
             if self.var < self.const:
                 self.value = self.if_body.eval(num_samples, ignore_cache)
@@ -202,13 +207,58 @@ class TegConditional(Teg):
         return self.value
 
 
-# class TegTuple(Teg):
+class TegTuple(Teg):
 
-#     def __init__(self, *args):
-#         super(TegConditional, self).__init__(children=args)
+    def __init__(self, *args, sign=1):
+        super(TegTuple, self).__init__(children=args, sign=sign)
 
+    def __str__(self):
+
+        return str([str(child) for child in self.children])
+        return str(tuple(str(child) for child in self.children))
+
+    def eval(self, num_samples: int = 50, ignore_cache: bool = False) -> float:
+        if self.value is None or ignore_cache:
+            self.value = np.array([child.eval(num_samples, ignore_cache) for child in self.children])
+        return self.value
+
+
+class TegLetIn(Teg):
+
+    def __init__(self,
+                 new_vars: TegTuple,
+                 new_exprs: TegTuple,
+                 var: TegVariable,
+                 expr: Teg):
+        super(TegLetIn, self).__init__(children=[expr, *new_exprs])
+        self.new_vars = new_vars
+        self.new_exprs = new_exprs
+        self.var = var
+        self.expr = expr
+
+    def __str__(self):
+        bindings = [f'{var}={expr}' for var, expr in zip(self.new_vars.children, self.new_exprs.children)]
+        assignments = bindings[0] if len(bindings) == 1 else bindings
+        return f'let {assignments} in {self.var} = {self.expr}'
+
+    def eval(self, num_samples: int = 50, ignore_cache: bool = False) -> float:
+        if self.value is None or ignore_cache:
+            for var, expr in zip(self.new_vars.children, self.new_exprs.children):
+                # import ipdb; ipdb.set_trace()
+                var_val = expr.eval(num_samples, ignore_cache)
+                self.expr.bind_variable(var.name, var_val)
+            self.value = self.expr.eval(num_samples, ignore_cache)
+        return self.value
+
+
+class TegContext(dict):
+    """Mapping from strings to TegVariables. """
+    pass
 
 
 # TODO: Create functions for proper closure under derivative due to introduced infinitesimals
 # class TegFunction(Teg):
 #     name = 'function'
+
+# Should evaluation take in a context? Then there can be symbolic expressions
+# without values and then everything is bound at evaluation time.

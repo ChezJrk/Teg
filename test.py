@@ -1,8 +1,6 @@
 import unittest
 
-from integrable_program import TegIntegral, TegVariable, TegConditional, TegConstant
-from deriv import deriv
-from back_deriv import back_deriv
+from integrable_program import TegIntegral, TegVariable, TegConditional, TegConstant, TegTuple
 
 
 class TestArithmetic(unittest.TestCase):
@@ -152,7 +150,6 @@ class TestConditionals(unittest.TestCase):
 
     def test_branch_in_cond(self):
         # cond.bind_variable('x', b)
-        # self.assertEqual(cond.eval(), 1)
         a = TegVariable('a', 0)
         b = TegVariable('b', 1)
 
@@ -166,177 +163,40 @@ class TestConditionals(unittest.TestCase):
         self.assertEqual(integral.eval(), 0)
 
 
-class TestForwardDerivatives(unittest.TestCase):
+class TestTuples(unittest.TestCase):
 
-    def test_deriv_basics(self):
-        x = TegVariable('x', 1)
-        f = x + x
-        deriv_expr = deriv(f, {'x': 1})
-        # df(x=1)/dx
-        self.assertEqual(deriv_expr.eval(), 2)
+    def test_tuple_basics(self):
+        t = TegTuple(*[TegConstant(i) for i in range(5, 15)])
+        two_t = t + t
+        self.assertEqual(two_t.eval()[0], 10)
 
-        f = x * x
-        # df(x=1)/dx
-        deriv_expr = deriv(f, {'x': 1})
-        self.assertEqual(deriv_expr.eval(), 2)
+        t_squared = t * t
+        self.assertEqual(t_squared.eval()[0], 25)
 
-    def test_deriv_poly(self):
-        x = TegVariable('x', 1)
-        c1 = TegConstant(1)
-        c2 = TegConstant(3)
-        f = c1 * x**3 + c2 * x**2 + c2 * x + c1
-        # df(x=1)/dx
-        deriv_expr = deriv(f, {'x': 1})
-        self.assertEqual(deriv_expr.eval(), 12)
+        x = TegVariable("x", 2)
+        v1 = TegTuple(*[TegConstant(i) for i in range(5, 15)])
+        v2 = TegTuple(*[TegConditional(x, 0, TegConstant(1), TegConstant(2))
+                        for i in range(5, 15)])
 
-        deriv_expr = deriv(f, {'x': 1})
-        deriv_expr.bind_variable('x', -1)
-        # df(x=-1)/dx
-        self.assertEqual(deriv_expr.eval(ignore_cache=True), 0)
+        t_squared = v1 * v2
+        self.assertEqual(t_squared.eval()[0], 10)
 
-    def test_deriv_branch(self):
-        x = TegVariable('x')
-        theta = TegVariable('theta', 1)
-        f = TegConditional(x, 0, theta, theta * theta)
-
-        deriv_expr = deriv(f, {'theta': 1})
-        x.bind_variable('x', 1)
-        # deriv(int_{a=0}^{1} x*theta dx)
-        self.assertAlmostEqual(deriv_expr.eval(), 2)
+    def test_tuple_branch(self):
+        x = TegVariable("x", 2)
+        v = TegTuple(*[TegConstant(i) for i in range(5, 15)])
+        cond = TegConditional(x, 0, v, TegConstant(1))
+        res = TegConstant(1) + cond + v
+        self.assertEqual(res.eval()[0], 7)
 
         x.bind_variable('x', -1)
-        self.assertAlmostEqual(deriv_expr.eval(ignore_cache=True), 1)
+        self.assertEqual(res.eval(ignore_cache=True)[0], 11)
 
-    def test_deriv_integral(self):
-        a = TegVariable('a', 0)
-        b = TegVariable('b', 1)
-
+    def test_tuple_integral(self):
         x = TegVariable('x')
-        theta = TegVariable('theta', 5)
-        f = TegIntegral(a, b, x * theta, x)
-
-        deriv_expr = deriv(f, {'theta': 1})
-
-        # deriv(int_{a=0}^{1} x*theta dx)
-        self.assertAlmostEqual(deriv_expr.eval(), 0.5)
-
-    def test_deriv_integral_branch_poly(self):
-        a = TegConstant(name='a', value=0)
-        b = TegConstant(name='b', value=1)
-
-        theta1 = TegVariable('theta1', -1)
-        theta2 = TegVariable('theta2', 1)
-        # g = \int_a^b if(x<0.5) x*theta1 else 1 dx
-        # h = \int_a^b x*theta2 + x^2theta1^2 dx
-        x = TegVariable('x')
-        body = TegConditional(x, 0.5, x * theta1, b)
-        g = TegIntegral(a, b, body, x)
-        h = TegIntegral(a, b, x * theta2 + x**2 * theta1**2, x)
-
-        y = TegVariable('y', 0)
-        # if(y < 1) g else h
-        f = TegConditional(y, 1, g, h)
-
-        # df/d(theta1)
-        deriv_expr = deriv(f, {'theta1': 1, 'theta2': 0})
-        self.assertAlmostEqual(deriv_expr.eval(), 0.125, places=3)
-
-        # df/d(theta2)
-        deriv_expr = deriv(f, {'theta1': 0, 'theta2': 1})
-        self.assertAlmostEqual(deriv_expr.eval(ignore_cache=True), 0)
-
-        f.bind_variable('y', 2)
-        deriv_expr = deriv(f, {'theta1': 1, 'theta2': 0})
-        self.assertAlmostEqual(deriv_expr.eval(ignore_cache=True), -2/3, places=3)
-
-        deriv_expr = deriv(f, {'theta1': 0, 'theta2': 1})
-        self.assertAlmostEqual(deriv_expr.eval(ignore_cache=True), 1/2, places=3)
-
-
-class TestBackwardDerivatives(unittest.TestCase):
-
-    def test_deriv_basics(self):
-        x = TegVariable('x', 1)
-        f = x + x
-        deriv_dict = back_deriv(f, 1)
-        # df(x=1)/dx
-        self.assertEqual(deriv_dict['dx'].eval(), 2)
-
-        f = x * x
-        # df(x=1)/dx
-        deriv_dict = back_deriv(f, 1)
-        self.assertEqual(deriv_dict['dx'].eval(), 2)
-
-    def test_deriv_poly(self):
-        x = TegVariable('x', 1)
-        c1 = TegConstant(1)
-        c2 = TegConstant(3)
-        f = c1 * x**3 + c2 * x**2 + c2 * x + c1
-        # df(x=1)/dx
-        deriv_dict = back_deriv(f, 1)
-        self.assertEqual(deriv_dict['dx'].eval(), 12)
-
-        deriv_dict = back_deriv(f, 1)
-        deriv_dict['dx'].bind_variable('x', -1)
-        # df(x=-1)/dx
-        self.assertEqual(deriv_dict['dx'].eval(ignore_cache=True), 0)
-
-    def test_deriv_branch(self):
-        x = TegVariable('x')
-        theta = TegVariable('theta', 1)
-        f = TegConditional(x, 0, theta, theta * theta)
-
-        deriv_expr = back_deriv(f)
-        x.bind_variable('x', 1)
-        # deriv(if (x<0) theta else theta^2)
-        self.assertAlmostEqual(deriv_expr['dtheta'].eval(), 2)
-
-        x.bind_variable('x', -1)
-        self.assertAlmostEqual(deriv_expr['dtheta'].eval(ignore_cache=True), 1)
-
-    def test_deriv_integral(self):
-        a = TegVariable('a', 0)
-        b = TegVariable('b', 1)
-
-        x = TegVariable('x')
-        theta = TegVariable('theta', 5)
-        f = TegIntegral(a, b, x * theta, x)
-
-        deriv_expr = back_deriv(f)
-
-        # deriv(int_{a=0}^{1} x*theta dx)
-        self.assertAlmostEqual(deriv_expr['dtheta'].eval(), 0.5)
-
-    def test_deriv_integral_branch_poly(self):
-        a = TegConstant(name='a', value=0)
-        b = TegConstant(name='b', value=1)
-
-        theta1 = TegVariable('theta1', -1)
-        theta2 = TegVariable('theta2', 1)
-        # g = \int_a^b if(x<0.5) x*theta1 else 1 dx
-        # h = \int_a^b x*theta2 + x^2theta1^2 dx
-        x = TegVariable('x')
-        body = TegConditional(x, 0.5, x * theta1, b)
-        g = TegIntegral(a, b, body, x)
-        h = TegIntegral(a, b, x * theta2 + x**2 * theta1**2, x)
-
-        y = TegVariable('y', 0)
-        # if(y < 1) g else h
-        f = TegConditional(y, 1, g, h)
-
-        # df/d(theta1)
-        deriv_expr = back_deriv(f)
-        self.assertAlmostEqual(deriv_expr['dtheta1'].eval(), 0.125, places=3)
-        self.assertAlmostEqual(deriv_expr['dtheta2'].eval(ignore_cache=True), 0)
-
-        f.bind_variable('y', 2)
-        deriv_expr = back_deriv(f)
-        self.assertAlmostEqual(deriv_expr['dtheta1'].eval(ignore_cache=True), -2/3, places=3)
-        self.assertAlmostEqual(deriv_expr['dtheta2'].eval(ignore_cache=True), 1/2, places=3)
-
-# TODO: Implement derivatives
-# deriv (\int_-1^1 \int_{t}^{t+1} xt dx dt) x
-# deriv (\int_-1^1 \int_{t}^{t+1} xt dx dt) t
+        v = TegTuple(*[TegConstant(i) for i in range(0, 3)])
+        res = TegIntegral(TegConstant(0), TegConstant(1), v * x, x)
+        for r, a in zip(res.eval(), [0, .5, 1]):
+            self.assertAlmostEqual(r, a)
 
 
 if __name__ == '__main__':
