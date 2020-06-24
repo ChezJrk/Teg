@@ -1,5 +1,6 @@
 from typing import Dict, Set, Tuple, Iterable, Optional
 from collections import defaultdict
+from functools import reduce
 
 from integrable_program import (
     Teg,
@@ -55,6 +56,22 @@ def reverse_deriv_transform(expr: Teg,
         yield [reverse_deriv_transform(child, out_deriv_vals, not_ctx)
                for child in expr.children]
 
+    elif isinstance(expr, TegLetIn):
+        # NOTE: There's likely a cleaner way of doing this.
+        # Evaluate each of the expressions in the body
+        body_derivs = {f'd{var.name}': reverse_deriv_transform(e, TegConstant(1), not_ctx)
+                       for var, e in zip(expr.new_vars.children, expr.new_exprs.children)}
+        new_var_names = {f'd{var.name}' for var in expr.new_vars.children}
+
+        # Thread through derivatives of each subexpression
+        for name, dname_expr in reverse_deriv_transform(expr.expr, out_deriv_vals, not_ctx):
+            dvar_with_ctx = TegLetIn(expr.new_vars, expr.new_exprs, TegVariable(f'd{expr.var.name}'), dname_expr)
+            if name in new_var_names:
+                yield from ((n, d * dvar_with_ctx)
+                            for n, d in body_derivs[name])
+            else:
+                yield (name, dvar_with_ctx)
+
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported derivative.')
 
@@ -89,7 +106,7 @@ def reverse_deriv(expr: Teg, out_deriv_vals: TegTuple) -> Teg:
         single_outval = out_deriv_vals.children[0]
         derivs = derivs_for_single_outval(expr, single_outval, 0)
     else:
-        assert len(out_deriv_vals.children) == len(expr.children)
+        assert len(out_deriv_vals.children) == len(expr.children), f'Expected out_deriv to have "{len(expr.children)}" values, but got "{len(out_deriv_vals.children)}" values.'
 
         derivs = (derivs_for_single_outval(e, single_outval, i)
                   for i, (e, single_outval) in enumerate(zip(expr.children, out_deriv_vals.children)))

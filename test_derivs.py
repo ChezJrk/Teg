@@ -258,11 +258,13 @@ class TestReverseDerivatives(unittest.TestCase):
         var = TegVariable('w')
         expr = x1 + x2 * y
         letin = TegLetIn(new_vars, new_exprs, var, expr)
-        deriv_expr = reverse_deriv(letin, )
-        self.assertEqual(deriv_expr.eval(), 2)
 
-        deriv_expr = reverse_deriv(letin, )
-        self.assertEqual(deriv_expr.eval(ignore_cache=True), 5)
+        out_derivs = TegTuple(TegConstant(1))
+        deriv_expr = reverse_deriv(letin, out_derivs)
+
+        expected = [5, 2]
+        for r, e in zip(deriv_expr.eval(), expected):
+            self.assertEqual(r, e)
 
 # TODO: Factor out all shared functions to distill testing code
 # TODO: Implement derivatives

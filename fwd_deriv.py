@@ -76,11 +76,10 @@ def fwd_deriv_transform(expr: Teg, ctx: Dict[str, str], not_ctx: Set[str]) -> Tu
         # Compute derivatives of each expression and bind them to the corresponding dvar
         new_vars_with_derivs, new_exprs_with_derivs = list(expr.new_vars.children), list(expr.new_exprs.children)
         for v, e in zip(expr.new_vars.children, expr.new_exprs.children):
-            # By not passing in the updated contexts, require independence of bindings in let expression
+            # By not passing in the updated contexts, require independence of exprs in the body of the let expression
             de, ctx, not_ctx = fwd_deriv_transform(e, ctx, not_ctx)
             new_vars_with_derivs.append(TegVariable(f'd{v.name}'))
             new_exprs_with_derivs.append(de)
-        # import ipdb; ipdb.set_trace()
 
         dvar = TegVariable(f'd{expr.var.name}')
 

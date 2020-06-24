@@ -244,7 +244,6 @@ class TegLetIn(Teg):
     def eval(self, num_samples: int = 50, ignore_cache: bool = False) -> float:
         if self.value is None or ignore_cache:
             for var, expr in zip(self.new_vars.children, self.new_exprs.children):
-                # import ipdb; ipdb.set_trace()
                 var_val = expr.eval(num_samples, ignore_cache)
                 self.expr.bind_variable(var.name, var_val)
             self.value = self.expr.eval(num_samples, ignore_cache)
