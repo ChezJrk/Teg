@@ -1,6 +1,5 @@
-from typing import Dict, Set, Tuple, Iterable, Optional
+from typing import Set, Tuple, Iterable, Optional
 from collections import defaultdict
-from functools import reduce
 
 from integrable_program import (
     Teg,
@@ -12,7 +11,6 @@ from integrable_program import (
     TegIntegral,
     TegTuple,
     TegLetIn,
-    TegContext,
 )
 
 
@@ -54,14 +52,14 @@ def reverse_deriv_transform(expr: Teg,
 
     elif isinstance(expr, TegTuple):
         yield [reverse_deriv_transform(child, out_deriv_vals, not_ctx)
-               for child in expr.children]
+               for child in expr]
 
     elif isinstance(expr, TegLetIn):
         # NOTE: There's likely a cleaner way of doing this.
         # Evaluate each of the expressions in the body
         body_derivs = {f'd{var.name}': reverse_deriv_transform(e, TegConstant(1), not_ctx)
-                       for var, e in zip(expr.new_vars.children, expr.new_exprs.children)}
-        new_var_names = {f'd{var.name}' for var in expr.new_vars.children}
+                       for var, e in zip(expr.new_vars, expr.new_exprs)}
+        new_var_names = {f'd{var.name}' for var in expr.new_vars}
 
         # Thread through derivatives of each subexpression
         for name, dname_expr in reverse_deriv_transform(expr.expr, out_deriv_vals, not_ctx):
@@ -102,14 +100,15 @@ def reverse_deriv(expr: Teg, out_deriv_vals: TegTuple) -> Teg:
         derivs = TegLetIn(TegTuple(*new_vars), TegTuple(*new_vals), var, val)
         return derivs
 
-    if len(out_deriv_vals.children) == 1:
+    if len(out_deriv_vals) == 1:
         single_outval = out_deriv_vals.children[0]
         derivs = derivs_for_single_outval(expr, single_outval, 0)
     else:
-        assert len(out_deriv_vals.children) == len(expr.children), f'Expected out_deriv to have "{len(expr.children)}" values, but got "{len(out_deriv_vals.children)}" values.'
+        assert len(out_deriv_vals) == len(expr), \
+            f'Expected out_deriv to have "{len(expr)}" values, but got "{len(out_deriv_vals)}" values.'
 
         derivs = (derivs_for_single_outval(e, single_outval, i)
-                  for i, (e, single_outval) in enumerate(zip(expr.children, out_deriv_vals.children)))
+                  for i, (e, single_outval) in enumerate(zip(expr, out_deriv_vals)))
         derivs = TegTuple(*derivs)
 
     return derivs

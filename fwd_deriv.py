@@ -16,17 +16,16 @@ from integrable_program import (
 
 
 def fwd_deriv_transform(expr: Teg, ctx: Dict[str, str], not_ctx: Set[str]) -> Tuple[Teg, Dict[str, str], Set[str]]:
-    # print(expr, ctx, not_ctx)
 
     if isinstance(expr, TegConstant):
-        expr = TegConstant(0, name=expr.name, sign=expr.sign)
+        expr = TegConstant(0, name=expr.name)
 
     elif isinstance(expr, TegVariable):
         # NOTE: No expressions with the name "d{expr.name}" are allowed
         if expr.name not in not_ctx:
             new_name = f'd{expr.name}'
             ctx[expr.name] = new_name
-            expr = TegVariable(name=new_name, value=expr.value, sign=expr.sign)
+            expr = TegVariable(name=new_name, value=None if expr.value is None else expr.value * expr.sign)
         else:
             expr = TegConstant(0)
 
@@ -63,7 +62,7 @@ def fwd_deriv_transform(expr: Teg, ctx: Dict[str, str], not_ctx: Set[str]) -> Tu
 
     elif isinstance(expr, TegTuple):
         new_expr_list, new_ctx, new_not_ctx = [], TegContext(), set()
-        for child in expr.children:
+        for child in expr:
             child, ctx, not_ctx = fwd_deriv_transform(child, ctx, not_ctx)
             new_expr_list.append(child)
             new_ctx.update(ctx)
@@ -74,8 +73,8 @@ def fwd_deriv_transform(expr: Teg, ctx: Dict[str, str], not_ctx: Set[str]) -> Tu
     elif isinstance(expr, TegLetIn):
 
         # Compute derivatives of each expression and bind them to the corresponding dvar
-        new_vars_with_derivs, new_exprs_with_derivs = list(expr.new_vars.children), list(expr.new_exprs.children)
-        for v, e in zip(expr.new_vars.children, expr.new_exprs.children):
+        new_vars_with_derivs, new_exprs_with_derivs = list(expr.new_vars), list(expr.new_exprs)
+        for v, e in zip(expr.new_vars, expr.new_exprs):
             # By not passing in the updated contexts, require independence of exprs in the body of the let expression
             de, ctx, not_ctx = fwd_deriv_transform(e, ctx, not_ctx)
             new_vars_with_derivs.append(TegVariable(f'd{v.name}'))
@@ -87,7 +86,7 @@ def fwd_deriv_transform(expr: Teg, ctx: Dict[str, str], not_ctx: Set[str]) -> Tu
         # This means that they are erroniously added to ctx, so we 
         # remove them from ctx!
         dexpr, ctx, not_ctx = fwd_deriv_transform(expr.expr, ctx, not_ctx)
-        [ctx.pop(c.name, None) for c in expr.new_vars.children]
+        [ctx.pop(c.name, None) for c in expr.new_vars]
 
         expr = TegLetIn(TegTuple(*new_vars_with_derivs), TegTuple(*new_exprs_with_derivs), dvar, dexpr)
 
