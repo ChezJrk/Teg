@@ -41,10 +41,12 @@ class TegConstant(TegVariable):
 
 
 class TegAdd(Teg):
+    name = 'add'
     operation = operator.add
 
 
 class TegMul(Teg):
+    name = 'mul'
     operation = operator.mul
 
 

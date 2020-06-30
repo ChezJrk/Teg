@@ -39,7 +39,7 @@ def reverse_deriv_transform(expr: Teg,
     elif isinstance(expr, TegConditional):
         derivs_if = reverse_deriv_transform(expr.if_body, TegConstant(1), not_ctx)
         derivs_else = reverse_deriv_transform(expr.else_body, TegConstant(1), not_ctx)
-        yield from ((name, TegConditional(expr.var, expr.const, deriv_if, TegConstant(0)))
+        yield from ((name, out_deriv_vals * TegConditional(expr.var, expr.const, deriv_if, TegConstant(0)))
                     for name, deriv_if in derivs_if)
         yield from ((name, out_deriv_vals * TegConditional(expr.var, expr.const, TegConstant(0), deriv_else))
                     for name, deriv_else in derivs_else)

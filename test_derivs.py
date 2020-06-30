@@ -42,6 +42,7 @@ class TestForwardDerivatives(unittest.TestCase):
 
         deriv_expr = fwd_deriv(f, {'theta': 1})
         x.bind_variable('x', 1)
+
         # deriv(int_{a=0}^{1} x*theta dx)
         self.assertAlmostEqual(evaluate(deriv_expr), 2)
 

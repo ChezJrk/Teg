@@ -4,12 +4,10 @@ from reverse_deriv import reverse_deriv
 
 
 class TegFwdDeriv(Teg):
-    operation = fwd_deriv
 
     def __init__(self, expr: Teg, context: TegContext):
         super(TegFwdDeriv, self).__init__(children=[])
-        self.children[0] = self.operation(self.children[0], context)
-        self.deriv_expr = self.children[0]
+        self.deriv_expr = fwd_deriv(expr, context)
         self.expr = expr
         self.context = context
 
@@ -18,12 +16,10 @@ class TegFwdDeriv(Teg):
 
 
 class TegReverseDeriv(Teg):
-    operation = reverse_deriv
 
     def __init__(self, expr: Teg, out_deriv_vals: TegTuple):
         super(TegReverseDeriv, self).__init__(children=[])
-        self.children[0] = self.operation(self.children[0], out_deriv_vals)
-        self.deriv_expr = self.children[0]
+        self.deriv_expr = reverse_deriv(expr, out_deriv_vals)
         self.expr = expr
         self.out_deriv_vals = out_deriv_vals
 

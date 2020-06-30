@@ -1,4 +1,4 @@
-from typing import Dict, Set, Tuple, Callable
+from typing import Dict, Set, Tuple
 from functools import reduce
 
 from integrable_program import (
@@ -23,9 +23,10 @@ def fwd_deriv_transform(expr: Teg, ctx: Dict[str, str], not_ctx: Set[str]) -> Tu
     elif isinstance(expr, TegVariable):
         # NOTE: No expressions with the name "d{expr.name}" are allowed
         if expr.name not in not_ctx:
+            # Introduce derivative and leave the value unbound
             new_name = f'd{expr.name}'
             ctx[expr.name] = new_name
-            expr = TegVariable(name=new_name, value=None if expr.value is None else expr.value * expr.sign)
+            expr = TegVariable(name=new_name)
         else:
             expr = TegConstant(0)
 

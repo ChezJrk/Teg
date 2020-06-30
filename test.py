@@ -1,8 +1,31 @@
 import unittest
+import numpy as np
 
-from integrable_program import TegIntegral, TegVariable, TegConditional, TegConstant, TegTuple
+from integrable_program import (
+    Teg,
+    TegConstant,
+    TegVariable,
+    TegAdd,
+    TegMul,
+    TegConditional,
+    TegIntegral,
+    TegTuple,
+    TegLetIn,
+)
 from evaluate import evaluate
+from derivs import TegFwdDeriv, TegReverseDeriv
 import operator_overloads  # noqa: F401
+
+
+def check_nested_lists(self, results, expected, places=7):
+    for res, exp in zip(results, expected):
+        if isinstance(res, (list, np.ndarray)):
+            check_nested_lists(self, res, exp, places)
+        else:
+            t = (int, float, np.int64, np.float)
+            err = f'Result {res} of type {type(res)} and expected {exp} of type {type(exp)}'
+            assert isinstance(res, t) and isinstance(exp, t), err
+            self.assertAlmostEqual(res, exp, places)
 
 
 class TestArithmetic(unittest.TestCase):
@@ -195,10 +218,48 @@ class TestTuples(unittest.TestCase):
 
     def test_tuple_integral(self):
         x = TegVariable('x')
-        v = TegTuple(*[TegConstant(i) for i in range(0, 3)])
+        v = TegTuple(*[TegConstant(i) for i in range(3)])
         res = TegIntegral(TegConstant(0), TegConstant(1), v * x, x)
-        for r, a in zip(evaluate(res), [0, .5, 1]):
-            self.assertAlmostEqual(r, a)
+        res, expected = evaluate(res), [0, .5, 1]
+        check_nested_lists(self, res, expected)
+
+
+class TestLetIn(unittest.TestCase):
+
+    def test_let_in(self):
+        x = TegVariable('x', 2)
+        y = TegVariable('y', -1)
+        f = x * y
+        rev_res = TegReverseDeriv(f, TegTuple(TegConstant(1)))
+        # reverse_deriv(mul(x=2, y=-1), 1, 1)
+        # rev_res.deriv_expr is: let ['dx=add(0, mul(1, y=-1))', 'dy=add(0, mul(1, x=2))'] in rev_deriv0 = dx, dy
+        expected = [-1, 2]
+
+        # y = -1
+        fwd_res = TegFwdDeriv(f, {'x': 1, 'y': 0})
+        self.assertEqual(evaluate(fwd_res), -1)
+
+        # df/dx * [df/dx, df/dy]
+        # -1 * [-1, 2] = [1, -2]
+        expected = [1, -2]
+        res = fwd_res * rev_res
+        check_nested_lists(self, evaluate(res), expected)
+
+
+class ActualIntegrationTest(unittest.TestCase):
+
+    def test_nested(self):
+        x, y = TegVariable('x', 2), TegVariable('y', -3)
+        v = TegTuple(*[TegFwdDeriv(x + y, {'x': 1, 'y': 0}), TegReverseDeriv(x * y, TegTuple(TegConstant(1)))])
+
+        expected = [1, [-3, 2]]
+        check_nested_lists(self, evaluate(v), expected)
+
+        x.unbind_variable('x')
+        # \int_0^1 [1, [-3, 2]] * x dx = [\int_0^1 x, [\int_0^1 -3x, \int_0^1 x^2]] = [1/2, [-3/2, 1/3]] 
+        res = TegIntegral(TegConstant(0), TegConstant(1), v * x, x)
+        expected = [1/2, [-3/2, 1/3]]
+        check_nested_lists(self, evaluate(res), expected, places=3)
 
 
 if __name__ == '__main__':
