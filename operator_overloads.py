@@ -15,11 +15,22 @@ from integrable_program import (
 )
 
 
+def overloads(to_cls):
+    def overloaded(from_cls):
+        """Dynamically inject all functions in `from_cls` into `to_cls`. """
+        for func in filter(lambda x: callable(x), from_cls.__dict__.values()):
+            setattr(to_cls, func.__name__, func)
+    return overloaded
+
+
+@overloads(Teg)
 class TegOverloads:
-    overloads = Teg
 
     def __add__(self, other):
         return TegAdd([self, other])
+
+    def __sub__(self, other):
+        return self + (-other)
 
     def __mul__(self, other):
         return TegMul([self, other])
@@ -42,16 +53,18 @@ class TegOverloads:
         return f'{self.name}({", ".join(children)})'
 
     def __neg__(self):
-        return type(self)(children=self.children, sign=self.sign*-1)
+        self.sign *= -1
+        return self
 
 
+@overloads(TegVariable)
 class TegVariableOverloads:
-    overloads = TegVariable
 
     def __lt__(self, other):
-        if isinstance(other, (float, int)):
-            other = TegConstant(other)
         return self.value < other.value
+
+    def __eq__(self, other):
+        return self.value == other.value
 
     def __str__(self):
         value = '' if self.value is None else f'={self.value}'
@@ -64,8 +77,8 @@ class TegVariableOverloads:
         return type(self)(name=self.name, value=self.value, sign=self.sign*-1)
 
 
+@overloads(TegConstant)
 class TegConstantOverloads:
-    overloads = TegConstant
 
     def __str__(self):
         return f'{"-" if self.sign == -1 else ""}{"" if not self.name else f"{self.name}="}{self.value}'
@@ -74,22 +87,22 @@ class TegConstantOverloads:
         return f'TegConstant(value={self.value}, name={self.name}, sign={self.sign})'
 
 
+@overloads(TegIntegral)
 class TegIntegralOverloads:
-    overloads = TegIntegral
 
     def __str__(self):
         return f'int_{{{str(self.lower)}}}^{{{str(self.upper)}}} {str(self.body)} d{self.dvar.name}'
 
 
+@overloads(TegConditional)
 class TegConditionalOverloads:
-    overloads = TegConditional
 
     def __str__(self):
-        return f'if({self.var} < {self.const}): {self.if_body} else {self.else_body}'
+        return f'(({self.var1} <{"=" if self.allow_eq else ""} {self.var2}) ? {(self.if_body)} : {(self.else_body)})'
 
 
+@overloads(TegTuple)
 class TegTupleOverloads:
-    overloads = TegTuple
 
     def __str__(self):
         return ", ".join([str(e) for e in self.children])
@@ -101,31 +114,10 @@ class TegTupleOverloads:
         return len(self.children)
 
 
+@overloads(TegLetIn)
 class TegLetInOverloads:
-    overloads = TegLetIn
 
     def __str__(self):
         bindings = [f'{var}={expr}' for var, expr in zip(self.new_vars, self.new_exprs)]
         assignments = bindings[0] if len(bindings) == 1 else bindings
-        return f'let {assignments} in {self.var} = {self.expr}'
-
-
-def inject_all_methods():
-
-    def add_method(func, *tocls):
-        for c in tocls:
-            setattr(c, func.__name__, func)
-
-    def filter_to_classes_in_module(cls):
-        return inspect.isclass(cls) and 'operator_overloads.' in repr(cls)
-
-    # Dynamically inject the body of the overloaded classes into Teg objects
-    # by getting all classes in this module and injecting them into classes
-    # specified by C.overloads.
-    clsmembers = inspect.getmembers(sys.modules[__name__], filter_to_classes_in_module)
-    for _, C in clsmembers:
-        for func in filter(lambda x: callable(x), C.__dict__.values()):
-            add_method(func, C.overloads)
-
-
-inject_all_methods()
+        return f'let {assignments} in {self.expr}'

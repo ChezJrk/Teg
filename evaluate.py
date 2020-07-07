@@ -28,7 +28,8 @@ def evaluate(expr: Teg, num_samples: int = 50, ignore_cache: bool = False):
         expr.value = expr.operation(*[evaluate(e, num_samples, ignore_cache) for e in expr.children])
 
     elif isinstance(expr, TegConditional):
-        expr.value = evaluate(expr.if_body if expr.var < expr.const else expr.else_body, num_samples, ignore_cache)
+        body = expr.if_body if expr.var1 < expr.var2 or (expr.allow_eq and expr.var1 == expr.var2) else expr.else_body
+        expr.value = evaluate(body, num_samples, ignore_cache)
 
     elif isinstance(expr, TegIntegral):
         lower = evaluate(expr.lower, num_samples, ignore_cache)
@@ -71,4 +72,4 @@ def evaluate(expr: Teg, num_samples: int = 50, ignore_cache: bool = False):
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported derivative.')
 
-    return expr.value
+    return expr.value * expr.sign

@@ -12,6 +12,7 @@ from integrable_program import (
     TegTuple,
     TegLetIn,
 )
+from fwd_deriv import delta_contribution
 
 
 def reverse_deriv_transform(expr: Teg,
@@ -39,12 +40,14 @@ def reverse_deriv_transform(expr: Teg,
     elif isinstance(expr, TegConditional):
         derivs_if = reverse_deriv_transform(expr.if_body, TegConstant(1), not_ctx)
         derivs_else = reverse_deriv_transform(expr.else_body, TegConstant(1), not_ctx)
-        yield from ((name, out_deriv_vals * TegConditional(expr.var, expr.const, deriv_if, TegConstant(0)))
+        yield from ((name, out_deriv_vals * TegConditional(expr.var1, expr.var2, deriv_if, TegConstant(0)))
                     for name, deriv_if in derivs_if)
-        yield from ((name, out_deriv_vals * TegConditional(expr.var, expr.const, TegConstant(0), deriv_else))
+        yield from ((name, out_deriv_vals * TegConditional(expr.var1, expr.var2, TegConstant(0), deriv_else))
                     for name, deriv_else in derivs_else)
 
     elif isinstance(expr, TegIntegral):
+        moving_var_data = delta_contribution(expr, not_ctx)
+        yield from moving_var_data.values()
         not_ctx.add(expr.dvar.name)
         deriv_body_traces = reverse_deriv_transform(expr.body, TegConstant(1), not_ctx)
         yield from ((name, out_deriv_vals * TegIntegral(expr.lower, expr.upper, deriv_body, expr.dvar))
@@ -63,7 +66,7 @@ def reverse_deriv_transform(expr: Teg,
 
         # Thread through derivatives of each subexpression
         for name, dname_expr in reverse_deriv_transform(expr.expr, out_deriv_vals, not_ctx):
-            dvar_with_ctx = TegLetIn(expr.new_vars, expr.new_exprs, TegVariable(f'd{expr.var.name}'), dname_expr)
+            dvar_with_ctx = TegLetIn(expr.new_vars, expr.new_exprs, dname_expr)
             if name in new_var_names:
                 yield from ((n, d * dvar_with_ctx)
                             for n, d in body_derivs[name])
@@ -95,9 +98,10 @@ def reverse_deriv(expr: Teg, out_deriv_vals: TegTuple) -> Teg:
 
         new_vars = [TegVariable(var_name) for var_name in partial_deriv_map.keys()]
         new_vals = [*partial_deriv_map.values()]
-        var = TegVariable(f'rev_deriv{i}')
-        val = TegTuple(*new_vars) if len(new_vars) > 1 else new_vars[0]
-        derivs = TegLetIn(TegTuple(*new_vars), TegTuple(*new_vals), var, val)
+
+        assert len(new_vals) > 0, 'There must be variables to compute derivatives. '
+        out_expr = TegTuple(*new_vars) if len(new_vars) > 1 else new_vars[0]
+        derivs = TegLetIn(TegTuple(*new_vars), TegTuple(*new_vals), out_expr)
         return derivs
 
     if len(out_deriv_vals) == 1:

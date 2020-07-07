@@ -38,7 +38,7 @@ class TestForwardDerivatives(unittest.TestCase):
     def test_deriv_branch(self):
         x = TegVariable('x')
         theta = TegVariable('theta', 1)
-        f = TegConditional(x, 0, theta, theta * theta)
+        f = TegConditional(x, TegConstant(0), theta, theta * theta)
 
         deriv_expr = fwd_deriv(f, {'theta': 1})
         x.bind_variable('x', 1)
@@ -71,13 +71,13 @@ class TestForwardDerivatives(unittest.TestCase):
         # g = \int_a^b if(x<0.5) x*theta1 else 1 dx
         # h = \int_a^b x*theta2 + x^2theta1^2 dx
         x = TegVariable('x')
-        body = TegConditional(x, 0.5, x * theta1, b)
+        body = TegConditional(x, TegConstant(0.5), x * theta1, b)
         g = TegIntegral(a, b, body, x)
         h = TegIntegral(a, b, x * theta2 + x**2 * theta1**2, x)
 
         y = TegVariable('y', 0)
         # if(y < 1) g else h
-        f = TegConditional(y, 1, g, h)
+        f = TegConditional(y, TegConstant(1), g, h)
 
         # df/d(theta1)
         deriv_expr = fwd_deriv(f, {'theta1': 1, 'theta2': 0})
@@ -128,9 +128,9 @@ class TestForwardDerivatives(unittest.TestCase):
         # w = x1 + x2 * y
         new_vars = TegTuple(x1, x2)
         new_exprs = TegTuple(y + z, y * z)
-        var = TegVariable('w')
+        # var = TegVariable('w')
         expr = x1 + x2 * y
-        letin = TegLetIn(new_vars, new_exprs, var, expr)
+        letin = TegLetIn(new_vars, new_exprs, expr)
         deriv_expr = fwd_deriv(letin, {'y': 0, 'z': 1})
         self.assertEqual(evaluate(deriv_expr), 2)
 
@@ -172,7 +172,7 @@ class TestReverseDerivatives(unittest.TestCase):
     def test_deriv_branch(self):
         x = TegVariable('x')
         theta = TegVariable('theta', 1)
-        f = TegConditional(x, 0, theta, theta * theta)
+        f = TegConditional(x, TegConstant(0), theta, theta * theta)
 
         deriv_expr = reverse_deriv(f, self.single_out_deriv)
         x.bind_variable('x', 1)
@@ -204,13 +204,13 @@ class TestReverseDerivatives(unittest.TestCase):
         # g = \int_a^b if(x<0.5) x*theta1 else 1 dx
         # h = \int_a^b x*theta2 + x^2theta1^2 dx
         x = TegVariable('x')
-        body = TegConditional(x, 0.5, x * theta1, b)
+        body = TegConditional(x, TegConstant(0.5), x * theta1, b)
         g = TegIntegral(a, b, body, x)
         h = TegIntegral(a, b, x * theta2 + x**2 * theta1**2, x)
 
         y = TegVariable('y', 0)
         # if(y < 1) g else h
-        f = TegConditional(y, 1, g, h)
+        f = TegConditional(y, TegConstant(1), g, h)
 
         # [df/d(theta1), df/d(theta2)]
         deriv_expr = reverse_deriv(f, self.single_out_deriv)
@@ -255,12 +255,12 @@ class TestReverseDerivatives(unittest.TestCase):
 
         # let x1 = y + z
         #     x2 = y * z in
-        # w = x1 + x2 * y
+        # x1 + x2 * y
         new_vars = TegTuple(x1, x2)
         new_exprs = TegTuple(y + z, y * z)
-        var = TegVariable('w')
+        # var = TegVariable('w')
         expr = x1 + x2 * y
-        letin = TegLetIn(new_vars, new_exprs, var, expr)
+        letin = TegLetIn(new_vars, new_exprs, expr)
 
         out_derivs = TegTuple(TegConstant(1))
         deriv_expr = reverse_deriv(letin, out_derivs)

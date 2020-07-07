@@ -150,14 +150,14 @@ class TestConditionals(unittest.TestCase):
         b = TegVariable('b', 1)
 
         x = TegVariable('x')
-        cond = TegConditional(x, 0, a, b)
+        cond = TegConditional(x, TegConstant(0), a, b)
 
         # if(x < c) 0 else 1 at x=-1
-        cond.bind_variable('x', TegVariable('d', -1))
+        cond.bind_variable('x', -1)
         self.assertEqual(evaluate(cond), 0)
 
         # if(x < 0) 0 else 1 at x=1
-        cond.bind_variable('x', b)
+        cond.bind_variable('x', 1)
         self.assertEqual(evaluate(cond, ignore_cache=True), 1)
 
     def test_integrate_branch(self):
@@ -167,7 +167,7 @@ class TestConditionals(unittest.TestCase):
         x = TegVariable('x')
         d = TegVariable('d', 0)
         # if(x < c) 0 else 1
-        body = TegConditional(x, 0, d, b)
+        body = TegConditional(x, TegConstant(0), d, b)
         integral = TegIntegral(a, b, body, x)
 
         # int_{a=-1}^{b=1} (if(x < c) 0 else 1) dx
@@ -181,7 +181,7 @@ class TestConditionals(unittest.TestCase):
         x = TegVariable('x', -1)
         t = TegVariable('t')
         # if(x < c) 0 else 1
-        upper = TegConditional(x, 0, a, b)
+        upper = TegConditional(x, TegConstant(0), a, b)
         integral = TegIntegral(a, upper, t, t)
 
         # int_{a=0}^{if(x < c) 0 else 1} t dt
@@ -200,7 +200,7 @@ class TestTuples(unittest.TestCase):
 
         x = TegVariable("x", 2)
         v1 = TegTuple(*[TegConstant(i) for i in range(5, 15)])
-        v2 = TegTuple(*[TegConditional(x, 0, TegConstant(1), TegConstant(2))
+        v2 = TegTuple(*[TegConditional(x, TegConstant(0), TegConstant(1), TegConstant(2))
                         for i in range(5, 15)])
 
         t_squared = v1 * v2
@@ -209,7 +209,7 @@ class TestTuples(unittest.TestCase):
     def test_tuple_branch(self):
         x = TegVariable("x", 2)
         v = TegTuple(*[TegConstant(i) for i in range(5, 15)])
-        cond = TegConditional(x, 0, v, TegConstant(1))
+        cond = TegConditional(x, TegConstant(0), v, TegConstant(1))
         res = TegConstant(1) + cond + v
         self.assertEqual(evaluate(res)[0], 7)
 
@@ -256,10 +256,176 @@ class ActualIntegrationTest(unittest.TestCase):
         check_nested_lists(self, evaluate(v), expected)
 
         x.unbind_variable('x')
-        # \int_0^1 [1, [-3, 2]] * x dx = [\int_0^1 x, [\int_0^1 -3x, \int_0^1 x^2]] = [1/2, [-3/2, 1/3]] 
+        # \int_0^1 [1, [-3, 2]] * x dx = [\int_0^1 x, [\int_0^1 -3x, \int_0^1 x^2]] = [1/2, [-3/2, 1/3]]
         res = TegIntegral(TegConstant(0), TegConstant(1), v * x, x)
         expected = [1/2, [-3/2, 1/3]]
         check_nested_lists(self, evaluate(res), expected, places=3)
+
+    def test_deriv_inside_integral(self):
+        x = TegVariable('x')
+
+        integral = TegIntegral(TegConstant(0), TegConstant(1), TegFwdDeriv(x * x, {'x': 1}), x)
+        self.assertAlmostEqual(evaluate(integral), 1)
+
+        integral = TegIntegral(TegConstant(0), TegConstant(1), TegReverseDeriv(x * x, TegTuple(TegConstant(1))), x)
+        self.assertAlmostEqual(evaluate(integral, ignore_cache=True), 1)
+
+    def test_deriv_outside_integral(self):
+        x = TegVariable('x')
+        integral = TegIntegral(TegConstant(0), TegConstant(1), x, x)
+
+        with self.assertRaises(AssertionError):
+            d_integral = TegFwdDeriv(integral, {'x': 1})
+            evaluate(d_integral)
+
+
+class VariableBranchConditionsTest(unittest.TestCase):
+
+    def test_deriv_heaviside(self):
+        x = TegVariable('x')
+        t = TegVariable('t', 0.5)
+        heaviside = TegConditional(x, t, TegConstant(0), TegConstant(1))
+        integral = TegIntegral(TegConstant(0), TegConstant(1), heaviside, x)
+
+        # d/dt int_{x=0}^1 (x<t) ? 0 : 1
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(fwd_dintegral), 1)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 1)
+
+        neg_heaviside = TegConditional(x, t, TegConstant(1), TegConstant(0))
+        integral = TegIntegral(TegConstant(0), TegConstant(1), neg_heaviside, x)
+
+        # d/dt int_{x=0}^{1} (x<t) ? 1 : 0
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(fwd_dintegral, ignore_cache=True), -1)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), -1)
+
+    def test_deriv_heaviside_discontinuity_out_of_domain(self):
+        x = TegVariable('x')
+        t = TegVariable('t', 2)
+        heaviside = TegConditional(x, t, TegConstant(0), TegConstant(1))
+        integral = TegIntegral(TegConstant(0), TegConstant(1), heaviside, x)
+
+        # d/dt int_{x=0}^1 (x<t) ? 0 : 1
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(fwd_dintegral), 0)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 0)
+
+        t.bind_variable('t', -1)
+        # d/dt int_{x=0}^1 (x<t) ? 0 : 1
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(fwd_dintegral, ignore_cache=True), 0)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 0)
+
+    def test_deriv_scaled_heaviside(self):
+        x = TegVariable('x')
+        t = TegVariable('t', 0.5)
+        heavyside_t = TegConditional(x, t, TegConstant(0), TegConstant(1))
+        body = (x + t) * heavyside_t
+        integral = TegIntegral(TegConstant(0), TegConstant(1), body, x)
+
+        # d/dt int_{x=0}^1 (x + t) * ((x<t) ? 0 : 1)
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(fwd_dintegral), 1.5)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 1.5)
+
+    def test_deriv_add_heaviside(self):
+        x = TegVariable('x')
+        t = TegVariable('t', 0.5)
+        heavyside_t = TegConditional(x, t, TegConstant(0), TegConstant(1))
+        body = x + t + heavyside_t
+        integral = TegIntegral(TegConstant(0), TegConstant(1), body, x)
+
+        # d/dt int_{x=0}^1 x + t + ((x<t) ? 0 : 1)
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(fwd_dintegral), 2)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 2)
+
+    def test_deriv_sum_heavisides(self):
+        x = TegVariable('x')
+        t = TegVariable('t', 0.5)
+        heavyside_t = TegConditional(x, t, TegConstant(0), TegConstant(1))
+        flipped_heavyside_t = TegConditional(x, t, TegConstant(1), TegConstant(0))
+        body = flipped_heavyside_t + TegConstant(2) * heavyside_t
+        integral = TegIntegral(TegConstant(0), TegConstant(1), body, x)
+
+        # d/dt int_{x=0}^1 ((x<t=0.5) ? 1 : 0) + 2 * ((x<t=0.5) ? 0 : 1)
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(fwd_dintegral), 1)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 1)
+
+        t1 = TegVariable('t1', 0.3)
+        heavyside_t1 = TegConditional(x, t1, TegConstant(0), TegConstant(1))
+        body = heavyside_t + heavyside_t1
+        integral = TegIntegral(TegConstant(0), TegConstant(1), body, x)
+
+        # d/dt int_{x=0}^1 ((x<t=0.5) ? 0 : 1) + ((x<t=0.3) ? 0 : 1)
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1, 't1': 1})
+        self.assertAlmostEqual(evaluate(fwd_dintegral, ignore_cache=True), 2)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        check_nested_lists(self, evaluate(rev_dintegral, ignore_cache=True), [1, 1])
+
+        body = heavyside_t + heavyside_t
+        integral = TegIntegral(TegConstant(0), TegConstant(1), body, x)
+
+        # d/dt int_{x=0}^1 ((x<t=0.5) ? 0 : 1) + ((x<t=0.3) ? 0 : 1)
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(fwd_dintegral, ignore_cache=True), 2)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 2)
+
+    def test_deriv_product_heavisides(self):
+        x = TegVariable('x')
+        t = TegVariable('t', 0.5)
+        heavyside_t = TegConditional(x, t, TegConstant(0), TegConstant(1))
+        flipped_heavyside_t = TegConditional(x, t, TegConstant(1), TegConstant(0))
+        body = heavyside_t * heavyside_t
+        integral = TegIntegral(TegConstant(0), TegConstant(1), body, x)
+
+        # d/dt int_{x=0}^1 ((x<t=0.5) ? 0 : 1) * ((x<t=0.5) ? 0 : 1)
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(fwd_dintegral), 1)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 1)
+
+        body = flipped_heavyside_t * heavyside_t
+        integral = TegIntegral(TegConstant(0), TegConstant(1), body, x)
+
+        # d/dt int_{x=0}^1 ((x<t=0.5) ? 1 : 0) * ((x<t=0.5) ? 0 : 1)
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(fwd_dintegral, ignore_cache=True), 0)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 0)
+
+        t1 = TegVariable('t1', 0.3)
+        heavyside_t1 = TegConditional(x, t1, TegConstant(0), TegConstant(1))
+        body = heavyside_t * heavyside_t1
+        integral = TegIntegral(TegConstant(0), TegConstant(1), body, x)
+
+        # d/dt int_{x=0}^1 ((x<t=0.5) ? 0 : 1) * ((x<t1=0.3) ? 0 : 1)
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1, 't1': 1})
+        self.assertAlmostEqual(evaluate(fwd_dintegral, ignore_cache=True), 1)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        check_nested_lists(self, evaluate(rev_dintegral, ignore_cache=True), [1, 0])
 
 
 if __name__ == '__main__':

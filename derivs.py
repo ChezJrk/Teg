@@ -6,8 +6,8 @@ from reverse_deriv import reverse_deriv
 class TegFwdDeriv(Teg):
 
     def __init__(self, expr: Teg, context: TegContext):
-        super(TegFwdDeriv, self).__init__(children=[])
-        self.deriv_expr = fwd_deriv(expr, context)
+        super(TegFwdDeriv, self).__init__(children=[fwd_deriv(expr, context)])
+        self.deriv_expr = self.children[0]
         self.expr = expr
         self.context = context
 
@@ -18,8 +18,8 @@ class TegFwdDeriv(Teg):
 class TegReverseDeriv(Teg):
 
     def __init__(self, expr: Teg, out_deriv_vals: TegTuple):
-        super(TegReverseDeriv, self).__init__(children=[])
-        self.deriv_expr = reverse_deriv(expr, out_deriv_vals)
+        super(TegReverseDeriv, self).__init__(children=[reverse_deriv(expr, out_deriv_vals)])
+        self.deriv_expr = self.children[0]
         self.expr = expr
         self.out_deriv_vals = out_deriv_vals
 

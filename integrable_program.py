@@ -1,10 +1,10 @@
-from typing import Optional
+from typing import Optional, List, Dict, Any
 import operator
 
 
 class Teg:
 
-    def __init__(self, children, sign=1):
+    def __init__(self, children: List, sign: int = 1):
         super(Teg, self).__init__()
         self.children = children
         self.sign = sign
@@ -18,11 +18,14 @@ class Teg:
 
 
 class TegVariable(Teg):
+    global_uid = 0
 
     def __init__(self, name: str, value: Optional[float] = None):
         super(TegVariable, self).__init__(children=[])
         self.name = name
         self.value = value
+        self.uid = TegVariable.global_uid
+        TegVariable.global_uid += 1
 
     def bind_variable(self, var_name: str, value: Optional[float]) -> None:
         if self.name == var_name:
@@ -32,9 +35,7 @@ class TegVariable(Teg):
 class TegConstant(TegVariable):
 
     def __init__(self, value: Optional[float], name: str = ''):
-        super(TegConstant, self).__init__(name='', value=value)
-        self.value = value
-        self.name = name
+        super(TegConstant, self).__init__(name=name, value=value)
 
     def bind_variable(self, var_name: str, value: Optional[float]) -> None:
         pass
@@ -53,33 +54,18 @@ class TegMul(Teg):
 class TegIntegral(Teg):
 
     def __init__(self, lower: TegConstant, upper: TegConstant, body: Teg, dvar: TegVariable):
-        super(TegIntegral, self).__init__(children=[lower, upper, body, dvar])
-        self.lower = lower
-        self.upper = upper
-        self.body = body
+        super(TegIntegral, self).__init__(children=[lower, upper, body])
+        # super(TegIntegral, self).__init__(children=[lower, upper, TegFunction('', body, dvar)])
+        self.lower, self.upper, self.body = self.children
         self.dvar = dvar
-
-    def bind_variable(self, var_name: str, value: Optional[float]):
-        # assert self.dvar.name == var_name, (f'The name variable for the infinitesimal "{self.dvar.name}" '
-        # f'should be different than the variable "{var_name}" that is bound.')
-        self.lower.bind_variable(var_name, value)
-        self.upper.bind_variable(var_name, value)
-        self.body.bind_variable(var_name, value)
 
 
 class TegConditional(Teg):
 
-    def __init__(self, var: TegVariable, const: TegConstant, if_body: Teg, else_body: Teg):
-        super(TegConditional, self).__init__(children=[var, const, if_body, else_body])
-        self.var = var
-        self.const = const
-        self.if_body = if_body
-        self.else_body = else_body
-
-    def bind_variable(self, var_name: str, value: Optional[float]):
-        self.var.bind_variable(var_name, value)
-        self.if_body.bind_variable(var_name, value)
-        self.else_body.bind_variable(var_name, value)
+    def __init__(self, var1: TegVariable, var2: TegVariable, if_body: Teg, else_body: Teg, allow_eq: bool = False):
+        super(TegConditional, self).__init__(children=[var1, var2, if_body, else_body])
+        self.var1, self.var2, self.if_body, self.else_body = self.children
+        self.allow_eq = allow_eq
 
 
 class TegTuple(Teg):
@@ -93,15 +79,36 @@ class TegLetIn(Teg):
     def __init__(self,
                  new_vars: TegTuple,
                  new_exprs: TegTuple,
-                 var: TegVariable,
                  expr: Teg):
         super(TegLetIn, self).__init__(children=[expr, *new_exprs])
         self.new_vars = new_vars
-        self.new_exprs = new_exprs
-        self.var = var
-        self.expr = expr
+        self.new_exprs = self.children[1:]
+        self.expr = self.children[0]
+
+
+class TegFunction(Teg):
+
+    def __init__(self, name, body, *args):
+        super(TegLetIn, self).__init__(children=[body])
+        self.name = name
+        self.body = body
+        self.args = args
 
 
 class TegContext(dict):
     """Mapping from strings to TegVariables. """
-    pass
+    global_uid = 0
+
+    def __init__(self, env: Optional[Dict[str, Any]] = None, parent: Optional['TegContext'] = None):
+        self.uid = TegContext.global_uid
+        TegContext.global_uid += 1
+        super().update({} if env is None else env)
+        self.parent = {} if parent is None else parent
+
+    def __getitem__(self, key: str) -> Any:
+        if key in self.env:
+            return self.env[key]
+        elif not self.parent:
+            raise ValueError(f'No value for the variable "{key}" has been set.')
+        else:
+            return self.parent[key]
