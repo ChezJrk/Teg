@@ -48,7 +48,7 @@ def evaluate(expr: Teg, num_samples: int = 50, ignore_cache: bool = False):
 
         # Hacky way to handle integrals of vectors
         try:
-            body_at_samples = np.vectorize(compute_samples)(var_samples)
+            body_at_samples = np.vectorize(compute_samples, otypes=[np.float])(var_samples)
         except ValueError:
             body_at_samples = np.vectorize(compute_samples, signature='()->(n)')(var_samples)
 

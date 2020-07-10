@@ -53,8 +53,7 @@ class TegOverloads:
         return f'{self.name}({", ".join(children)})'
 
     def __neg__(self):
-        self.sign *= -1
-        return self
+        return TegConstant(-1) * self
 
 
 @overloads(TegVariable)
@@ -91,7 +90,7 @@ class TegConstantOverloads:
 class TegIntegralOverloads:
 
     def __str__(self):
-        return f'int_{{{str(self.lower)}}}^{{{str(self.upper)}}} {str(self.body)} d{self.dvar.name}'
+        return f'int_{{{f"{self.dvar.name} = {str(self.lower)}"}}}^{{{str(self.upper)}}} {str(self.body)}'
 
 
 @overloads(TegConditional)
@@ -119,5 +118,9 @@ class TegLetInOverloads:
 
     def __str__(self):
         bindings = [f'{var}={expr}' for var, expr in zip(self.new_vars, self.new_exprs)]
-        assignments = bindings[0] if len(bindings) == 1 else bindings
+        if len(bindings) == 1:
+            assignments = bindings[0]
+        else:
+            joined_assignments = ',\n\t'.join(bindings)
+            assignments = f'[{joined_assignments}]'
         return f'let {assignments} in {self.expr}'

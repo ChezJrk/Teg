@@ -132,7 +132,7 @@ def fwd_deriv_transform(expr: Teg, ctx: Dict[str, str], not_ctx: Set[str]) -> Tu
 
     elif isinstance(expr, TegIntegral):
         assert expr.dvar not in ctx, f'Names of infinitesimal "{expr.dvar}" are distinct from context "{ctx}"'
-
+        not_ctx.discard(expr.dvar.name)
         moving_var_data = delta_contribution(expr, not_ctx)
         delta_val = TegConstant(0)
         for name, (new_name, val) in moving_var_data.items():

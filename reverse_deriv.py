@@ -46,8 +46,10 @@ def reverse_deriv_transform(expr: Teg,
                     for name, deriv_else in derivs_else)
 
     elif isinstance(expr, TegIntegral):
+        not_ctx.discard(expr.dvar.name)
         moving_var_data = delta_contribution(expr, not_ctx)
         yield from moving_var_data.values()
+
         not_ctx.add(expr.dvar.name)
         deriv_body_traces = reverse_deriv_transform(expr.body, TegConstant(1), not_ctx)
         yield from ((name, out_deriv_vals * TegIntegral(expr.lower, expr.upper, deriv_body, expr.dvar))

@@ -15,7 +15,7 @@ from integrable_program import (
 from evaluate import evaluate
 from derivs import TegFwdDeriv, TegReverseDeriv
 import operator_overloads  # noqa: F401
-
+from simplify import simplify
 
 def check_nested_lists(self, results, expected, places=7):
     for res, exp in zip(results, expected):
@@ -96,7 +96,7 @@ class TestIntegrations(unittest.TestCase):
 
 class TestNestedIntegrals(unittest.TestCase):
 
-    # TODO 
+    # TODO
     # def test_nested_integrals_with_variable_bounds(self):
     #     a, b = -1, 1
     #     x = TegVariable('x')
@@ -426,6 +426,34 @@ class VariableBranchConditionsTest(unittest.TestCase):
 
         rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
         check_nested_lists(self, evaluate(rev_dintegral, ignore_cache=True), [1, 0])
+
+    def test_tzu_mao(self):
+        # \int_{x=0}^1 x < t ?
+        #   \int_{y=0}^1 x < t1 ?
+        #     x * y : x * y^2 :
+        #   \int_{y=0}^1 y < t2 ?
+        #     x^2 * y : x^2 * y^2
+        zero, one = TegConstant(0), TegConstant(1)
+        x, y = TegVariable('x'), TegVariable('y')
+        t, t1, t2 = TegVariable('t', 0.5), TegVariable('t1', 0.25), TegVariable('t2', 0.75)
+        if_body = TegIntegral(zero, one, TegConditional(x, t1, x * y, x * y * y), y)
+        else_body = TegIntegral(zero, one, TegConditional(y, t2, x * x * y, x * x * y * y), y)
+        integral = TegIntegral(zero, one, TegConditional(x, t, if_body, else_body), x)
+
+        rev_dintegral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        expected = [-0.048, -0.041, -0.054]
+        check_nested_lists(self, evaluate(rev_dintegral, ignore_cache=True), expected, places=2)
+
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 1, 't1': 0, 't2': 0})
+        dt = evaluate(fwd_dintegral, ignore_cache=True)
+
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 0, 't1': 1, 't2': 0})
+        dt1 = evaluate(fwd_dintegral, ignore_cache=True)
+
+        fwd_dintegral = TegFwdDeriv(integral, {'t': 0, 't1': 0, 't2': 1})
+        dt2 = evaluate(fwd_dintegral, ignore_cache=True)
+
+        check_nested_lists(self, [dt, dt1, dt2], expected, places=2)
 
 
 if __name__ == '__main__':
