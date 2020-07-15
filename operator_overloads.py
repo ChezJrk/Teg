@@ -1,7 +1,4 @@
 """Add operator overload methods to Teg classes. """
-import inspect
-import sys
-
 from integrable_program import (
     Teg,
     TegConstant,

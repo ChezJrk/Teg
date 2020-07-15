@@ -455,6 +455,20 @@ class VariableBranchConditionsTest(unittest.TestCase):
 
         check_nested_lists(self, [dt, dt1, dt2], expected, places=2)
 
+    def test_double_integral(self):
+        # \int_{x=0}^1
+        #   deriv(
+        #       \int_{y=0}^1
+        #           (x < y ? 0 : 1)
+        zero, one = TegConstant(0), TegConstant(1)
+        x, y = TegVariable('x'), TegVariable('y')
+
+        body = TegConditional(x, y, zero, one)
+        integral = TegIntegral(zero, one, body, x)
+        body = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        double_integral = TegIntegral(zero, one, body, y)
+        self.assertAlmostEqual(evaluate(double_integral, num_samples=100), 1, places=1)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -55,7 +55,6 @@ class TegIntegral(Teg):
 
     def __init__(self, lower: TegConstant, upper: TegConstant, body: Teg, dvar: TegVariable):
         super(TegIntegral, self).__init__(children=[lower, upper, body])
-        # super(TegIntegral, self).__init__(children=[lower, upper, TegFunction('', body, dvar)])
         self.lower, self.upper, self.body = self.children
         self.dvar = dvar
 

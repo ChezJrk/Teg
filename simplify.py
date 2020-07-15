@@ -46,7 +46,7 @@ def simplify(expr: Teg) -> Teg:
                 return if_body
             else:
                 return else_body
-        return TegConditional(expr.var1, expr.var2, if_body, else_body)
+        return TegConditional(expr.var1, expr.var2, if_body, else_body, allow_eq=expr.allow_eq)
 
     elif isinstance(expr, TegIntegral):
         body = simplify(expr.body)

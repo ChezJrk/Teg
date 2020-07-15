@@ -15,7 +15,7 @@ from integrable_program import (
     TegLetIn,
     TegContext,
 )
-
+from substitute import substitute
 
 # TODO: Add in lexical scoping at some point (consider the change for eval, reverse, and forward mode)
 # Teg does not support expressions of the form integral_x d_x (f(x)).
@@ -66,14 +66,15 @@ def delta_contribution(expr, not_ctx):
             discont_expr.allow_eq = False
         expr_body_right = deepcopy(expr.body)
         for moving_var in moving_vars:
-            expr_body_right.bind_variable(expr.dvar.name, moving_var.value)
+            expr_body_right = substitute(expr_body_right, expr.dvar, moving_var)
 
         # Evaluate the discontinuity at x = t-
         for discont_expr in discont_exprs:
             discont_expr.allow_eq = True
         expr_body_left = deepcopy(expr.body)
         for moving_var in moving_vars:
-            expr_body_left.bind_variable(expr.dvar.name, moving_var.value)
+            expr_body_left = substitute(expr_body_left, expr.dvar, moving_var)
+
 
         # Set the value to what it was before
         for discont_expr, allow_eq_before in zip(discont_exprs, allow_eqs_before):
@@ -88,7 +89,6 @@ def delta_contribution(expr, not_ctx):
                                                          TegConstant(0)),
                                           TegConstant(0))
         moving_var_data[moving_var.name] = (f'd{moving_var.name}', moving_var_delta)
-
     return moving_var_data
 
 
