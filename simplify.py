@@ -9,6 +9,7 @@ from integrable_program import (
     TegTuple,
     TegLetIn,
 )
+from derivs import TegFwdDeriv, TegReverseDeriv
 import operator_overloads  # noqa: F401
 
 
@@ -55,12 +56,13 @@ def simplify(expr: Teg) -> Teg:
         return TegIntegral(expr.lower, expr.upper, body, expr.dvar)
 
     elif isinstance(expr, TegTuple):
-        if len(expr.children) == 1:
-            return simplify(expr.children[0])
         return TegTuple(*(simplify(child) for child in expr))
 
     elif isinstance(expr, TegLetIn):
         return TegLetIn(expr.new_vars, TegTuple(*(simplify(e) for e in expr.new_exprs)), simplify(expr.expr))
+
+    elif isinstance(expr, (TegFwdDeriv, TegReverseDeriv)):
+        return simplify(expr.deriv_expr)
 
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported fwd_derivative.')

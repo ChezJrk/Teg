@@ -64,30 +64,27 @@ class TegVariableOverloads:
 
     def __str__(self):
         value = '' if self.value is None else f'={self.value}'
-        return f"{'-' if self.sign == -1 else ''}{self.name}{value}"
+        return f"{self.name}{value}"
 
     def __repr__(self):
-        return f'TegVariable(name={self.name}, value={self.value}, sign={self.sign})'
-
-    def __neg__(self):
-        return type(self)(name=self.name, value=self.value, sign=self.sign*-1)
+        return f'TegVariable(name={self.name}, value={self.value})'
 
 
 @overloads(TegConstant)
 class TegConstantOverloads:
 
     def __str__(self):
-        return f'{"-" if self.sign == -1 else ""}{"" if not self.name else f"{self.name}="}{self.value}'
+        return f'{"" if not self.name else f"{self.name}="}{self.value}'
 
     def __repr__(self):
-        return f'TegConstant(value={self.value}, name={self.name}, sign={self.sign})'
+        return f'TegConstant(value={self.value}, name={self.name})'
 
 
 @overloads(TegIntegral)
 class TegIntegralOverloads:
 
     def __str__(self):
-        return f'int_{{{f"{self.dvar.name} = {str(self.lower)}"}}}^{{{str(self.upper)}}} {str(self.body)}'
+        return f'(int_{{{self.dvar.name}=[{str(self.lower)}, {str(self.upper)}]}} {str(self.body)})'
 
 
 @overloads(TegConditional)

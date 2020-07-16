@@ -455,6 +455,16 @@ class VariableBranchConditionsTest(unittest.TestCase):
 
         check_nested_lists(self, [dt, dt1, dt2], expected, places=2)
 
+    def test_single_integral_example(self):
+        # deriv(\int_{x=0}^1 (x < theta ? 1 : x * theta))
+        zero, one = TegConstant(0), TegConstant(1)
+        x, theta = TegVariable('x'), TegVariable('theta', 0.5)
+
+        body = TegConditional(x, theta, one, x * theta)
+        integral = TegIntegral(zero, one, body, x)
+        deriv_integral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(deriv_integral), -0.375, places=2)
+
     def test_double_integral(self):
         # \int_{x=0}^1
         #   deriv(
@@ -468,6 +478,95 @@ class VariableBranchConditionsTest(unittest.TestCase):
         body = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
         double_integral = TegIntegral(zero, one, body, y)
         self.assertAlmostEqual(evaluate(double_integral, num_samples=100), 1, places=1)
+
+    def test_nested_integral_moving_discontinuity(self):
+        # deriv(\int_{y=0}^{1} y * \int_{x=0}^{1} (x<t) ? 0 : 1)
+        zero, one = TegConstant(0), TegConstant(1)
+        x, y, t = TegVariable('x'), TegVariable('y'), TegVariable('t', 0.5)
+
+        body = TegIntegral(zero, one, TegConditional(x, t, zero, one), x)
+        integral = TegIntegral(zero, one, y * body, y)
+
+        deriv_integral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(deriv_integral), 0.5, places=3)
+
+        deriv_integral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), 0.5, places=3)
+
+
+class MovingBoundaryTest(unittest.TestCase):
+
+    def test_moving_upper_boundary(self):
+        # deriv(\int_{x=0}^{t=1} xt)
+        # 0.5 + 1 - 0 = 1.5
+        zero = TegConstant(0)
+        x, t = TegVariable('x'), TegVariable('t', 1)
+        integral = TegIntegral(zero, t, x * t, x)
+
+        deriv_integral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(deriv_integral), 1.5)
+
+        deriv_integral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), 1.5)
+
+    def test_moving_lower_boundary(self):
+        # deriv(\int_{x=t=-1}^{1} xt)
+        # 0 + 0 + 1 = 1
+        one = TegConstant(1)
+        x, t = TegVariable('x'), TegVariable('t', -1)
+        integral = TegIntegral(t, one, x * t, x)
+
+        deriv_integral = TegFwdDeriv(integral, {'t': 1})
+        self.assertAlmostEqual(evaluate(deriv_integral), 1, places=1)
+
+        deriv_integral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), 1, places=1)
+
+    def test_both_boundaries_moving(self):
+        # deriv(\int_{x=y=0}^{z=1} 1)
+        # = \int 0 + dz - dy
+        one = TegConstant(1)
+        x, y, z = TegVariable('x'), TegVariable('y', 0), TegVariable('z', 1)
+        integral = TegIntegral(y, z, one, x)
+
+        deriv_integral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        check_nested_lists(self, evaluate(deriv_integral), [1, -1])
+
+        deriv_integral = TegFwdDeriv(integral, {'y': 1, 'z': 0})
+        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), -1)
+
+        deriv_integral = TegFwdDeriv(integral, {'y': 0, 'z': 1})
+        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), 1)
+
+    def test_nested_integral_boundaries_moving(self):
+        # deriv(\int_{y=0}^{1} \int_{x=y=0}^{z=1} y)
+        # = \int 0 + dz - dy
+        zero, one = TegConstant(0), TegConstant(1)
+        x, y, z = TegVariable('x'), TegVariable('y'), TegVariable('z', 1)
+
+        body = TegIntegral(y, z, y * z, x)
+        integral = TegIntegral(zero, one, body, y)
+
+        deriv_integral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(deriv_integral), 2/3, places=3)
+
+        deriv_integral = TegFwdDeriv(integral, {'z': 1})
+        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), 2/3, places=3)
+
+    def test_nested_integral_boundaries_moving_scaled(self):
+        # deriv(\int_{y=0}^{1} \int_{x=y=0}^{z=1} y)
+        # = \int 0 + dz - dy
+        zero, one = TegConstant(0), TegConstant(1)
+        x, y, z = TegVariable('x'), TegVariable('y'), TegVariable('z', 1)
+
+        body = TegIntegral(y, z, y * z, x)
+        integral = TegIntegral(zero, one, y * body, y)
+
+        deriv_integral = TegReverseDeriv(integral, TegTuple(TegConstant(1)))
+        self.assertAlmostEqual(evaluate(deriv_integral), 5/12, places=3)
+
+        deriv_integral = TegFwdDeriv(integral, {'z': 1})
+        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), 5/12, places=3)
 
 
 if __name__ == '__main__':

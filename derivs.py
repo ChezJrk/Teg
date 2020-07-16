@@ -12,7 +12,7 @@ class TegFwdDeriv(Teg):
         self.context = context
 
     def __str__(self):
-        return f'fwd_deriv({self.expr}, {self.context}, {self.sign})'
+        return f'fwd_deriv({self.expr}, {self.context})'
 
 
 class TegReverseDeriv(Teg):
@@ -24,4 +24,4 @@ class TegReverseDeriv(Teg):
         self.out_deriv_vals = out_deriv_vals
 
     def __str__(self):
-        return f'reverse_deriv({self.expr}, {self.out_deriv_vals}, {self.sign})'
+        return f'reverse_deriv({self.expr}, {self.out_deriv_vals})'

@@ -19,12 +19,13 @@ def evaluate(expr: Teg, num_samples: int = 50, ignore_cache: bool = False):
     if expr.value is not None and not ignore_cache:
         if isinstance(expr, TegVariable):
             assert expr.value is not None, f'The variable "{expr.name}" must be bound to a value prior to evaluation.'
-        return expr.value * expr.sign
+        return expr.value
 
     if isinstance(expr, (TegConstant, TegVariable)):
         expr.value = expr.value
 
     elif isinstance(expr, (TegAdd, TegMul)):
+        # import ipdb; ipdb.set_trace()
         expr.value = expr.operation(*[evaluate(e, num_samples, ignore_cache) for e in expr.children])
 
     elif isinstance(expr, TegConditional):
@@ -34,7 +35,6 @@ def evaluate(expr: Teg, num_samples: int = 50, ignore_cache: bool = False):
     elif isinstance(expr, TegIntegral):
         lower = evaluate(expr.lower, num_samples, ignore_cache)
         upper = evaluate(expr.upper, num_samples, ignore_cache)
-        expr.sign *= (1 if lower < upper else -1)
 
         expr.dvar.value = None
 
@@ -55,7 +55,7 @@ def evaluate(expr: Teg, num_samples: int = 50, ignore_cache: bool = False):
         # Trapezoidal rule
         y_left = body_at_samples[:-1]  # left endpoints
         y_right = body_at_samples[1:]  # right endpoints
-        expr.value = step * np.sum(y_left + y_right, 0) / 2
+        expr.value = (1 if lower < upper else -1) * step * np.sum(y_left + y_right, 0) / 2
 
     elif isinstance(expr, TegTuple):
         expr.value = np.array([evaluate(e, num_samples, ignore_cache) for e in expr])
@@ -72,4 +72,4 @@ def evaluate(expr: Teg, num_samples: int = 50, ignore_cache: bool = False):
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported derivative.')
 
-    return expr.value * expr.sign
+    return expr.value

@@ -4,10 +4,9 @@ import operator
 
 class Teg:
 
-    def __init__(self, children: List, sign: int = 1):
+    def __init__(self, children: List):
         super(Teg, self).__init__()
         self.children = children
-        self.sign = sign
         self.value = None
 
     def bind_variable(self, var_name: str, value: Optional[float]) -> None:
@@ -53,7 +52,7 @@ class TegMul(Teg):
 
 class TegIntegral(Teg):
 
-    def __init__(self, lower: TegConstant, upper: TegConstant, body: Teg, dvar: TegVariable):
+    def __init__(self, lower: TegVariable, upper: TegVariable, body: Teg, dvar: TegVariable):
         super(TegIntegral, self).__init__(children=[lower, upper, body])
         self.lower, self.upper, self.body = self.children
         self.dvar = dvar

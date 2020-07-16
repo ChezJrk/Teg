@@ -75,7 +75,6 @@ def delta_contribution(expr, not_ctx):
         for moving_var in moving_vars:
             expr_body_left = substitute(expr_body_left, expr.dvar, moving_var)
 
-
         # Set the value to what it was before
         for discont_expr, allow_eq_before in zip(discont_exprs, allow_eqs_before):
             discont_expr.allow_eq = allow_eq_before
@@ -134,13 +133,24 @@ def fwd_deriv_transform(expr: Teg, ctx: Dict[str, str], not_ctx: Set[str]) -> Tu
         assert expr.dvar not in ctx, f'Names of infinitesimal "{expr.dvar}" are distinct from context "{ctx}"'
         not_ctx.discard(expr.dvar.name)
         moving_var_data = delta_contribution(expr, not_ctx)
+        # moving_boundary = boundary_contribution(expr, not_ctx)
+
+        # Apply Leibniz rule directly for moving boundaries
+        lower_deriv, ctx1, not_ctx1 = fwd_deriv_transform(expr.lower, ctx, not_ctx)
+        upper_deriv, ctx2, not_ctx2 = fwd_deriv_transform(expr.upper, ctx, not_ctx)
+        body_at_upper = substitute(expr.body, expr.dvar, upper_deriv)
+        body_at_lower = substitute(expr.body, expr.dvar, lower_deriv)
+        boundary_val = upper_deriv * body_at_upper - lower_deriv * body_at_lower
+
         delta_val = TegConstant(0)
         for name, (new_name, val) in moving_var_data.items():
             ctx[name] = new_name
             delta_val += TegVariable(new_name) * val
         not_ctx.add(expr.dvar.name)
         body, ctx, not_ctx = fwd_deriv_transform(expr.body, ctx, not_ctx)
-        expr = TegIntegral(expr.lower, expr.upper, body, expr.dvar) + delta_val
+        ctx = {**ctx, **ctx1, **ctx2}
+        not_ctx |= not_ctx1 | not_ctx2
+        expr = TegIntegral(expr.lower, expr.upper, body, expr.dvar) + delta_val + boundary_val
 
     elif isinstance(expr, TegTuple):
         new_expr_list, new_ctx, new_not_ctx = [], TegContext(), set()
