@@ -40,14 +40,23 @@ def simplify(expr: Teg) -> Teg:
         return simple1 * simple2
 
     elif isinstance(expr, TegConditional):
-        v1, v2, if_body, else_body = expr.var1, expr.var2, simplify(expr.if_body), simplify(expr.else_body)
-        if (isinstance(v1, TegVariable) and isinstance(v2, TegVariable)
-                and v1.value is not None and v2.value is not None):
-            if v1.value < v2.value or (expr.allow_eq and v1.value == v2.value):
-                return if_body
-            else:
-                return else_body
-        return TegConditional(expr.var1, expr.var2, if_body, else_body, allow_eq=expr.allow_eq)
+        lt_expr, if_body, else_body = simplify(expr.lt_expr), simplify(expr.if_body), simplify(expr.else_body)
+        if (isinstance(if_body, TegConstant) and isinstance(else_body, TegConstant)
+                and if_body.value == 0 and else_body.value == 0):
+            return if_body
+
+        # When lt_expr has a value (it's a bound variable or constant)
+        # return the appropriate branch
+        try:
+            if lt_expr.value is not None:
+                if lt_expr.value < 0 or (expr.allow_eq and lt_expr.value == 0):
+                    return if_body
+                else:
+                    return else_body
+        except AttributeError:
+            pass
+
+        return TegConditional(lt_expr, if_body, else_body, allow_eq=expr.allow_eq)
 
     elif isinstance(expr, TegIntegral):
         body = simplify(expr.body)

@@ -52,6 +52,11 @@ class TegOverloads:
     def __neg__(self):
         return TegConstant(-1) * self
 
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and len(self.children) == len(other.children)
+                and sum(e1 == e2 for e1, e2 in zip(self.children, other.children)) == len(self.children))
+
 
 @overloads(TegVariable)
 class TegVariableOverloads:
@@ -60,7 +65,9 @@ class TegVariableOverloads:
         return self.value < other.value
 
     def __eq__(self, other):
-        return self.value == other.value
+        return (type(self) == type(other)
+                and self.name == other.name
+                and self.uid == other.uid)
 
     def __str__(self):
         value = '' if self.value is None else f'={self.value}'
@@ -79,6 +86,23 @@ class TegConstantOverloads:
     def __repr__(self):
         return f'TegConstant(value={self.value}, name={self.name})'
 
+    def __eq__(self, other):
+        return self.value == other.value
+
+
+@overloads(TegAdd)
+class TegAddOverloads:
+
+    def __str__(self):
+        return f'({self.children[0]} + {self.children[1]})'
+
+
+@overloads(TegMul)
+class TegMulOverloads:
+
+    def __str__(self):
+        return f'({self.children[0]} * {self.children[1]})'
+
 
 @overloads(TegIntegral)
 class TegIntegralOverloads:
@@ -86,12 +110,24 @@ class TegIntegralOverloads:
     def __str__(self):
         return f'(int_{{{self.dvar.name}=[{str(self.lower)}, {str(self.upper)}]}} {str(self.body)})'
 
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and len(self.children) == len(other.children)
+                and sum(e1 == e2 for e1, e2 in zip(self.children, other.children)) == len(self.children)
+                and self.dvar == other.dvar)
+
 
 @overloads(TegConditional)
 class TegConditionalOverloads:
 
     def __str__(self):
-        return f'(({self.var1} <{"=" if self.allow_eq else ""} {self.var2}) ? {(self.if_body)} : {(self.else_body)})'
+        return f'(({self.lt_expr} <{"=" if self.allow_eq else ""} 0) ? {(self.if_body)} : {(self.else_body)})'
+
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and len(self.children) == len(other.children)
+                and sum(e1 == e2 for e1, e2 in zip(self.children, other.children)) == len(self.children)
+                and self.allow_eq == other.allow_eq)
 
 
 @overloads(TegTuple)
@@ -118,3 +154,9 @@ class TegLetInOverloads:
             joined_assignments = ',\n\t'.join(bindings)
             assignments = f'[{joined_assignments}]'
         return f'let {assignments} in {self.expr}'
+
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and len(self.children) == len(other.children)
+                and sum(e1 == e2 for e1, e2 in zip(self.children, other.children)) == len(self.children)
+                and self.new_vars == other.new_vars)

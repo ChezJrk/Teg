@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import operator
 
 
@@ -9,25 +9,25 @@ class Teg:
         self.children = children
         self.value = None
 
-    def bind_variable(self, var_name: str, value: Optional[float]) -> None:
-        [child.bind_variable(var_name, value) for child in self.children]
-
-    def unbind_variable(self, var_name: str) -> None:
-        self.bind_variable(var_name, None)
+    def bind_variable(self, var: 'TegVariable', value: Optional[float] = None) -> None:
+        [child.bind_variable(var, value) for child in self.children]
 
 
 class TegVariable(Teg):
     global_uid = 0
 
-    def __init__(self, name: str, value: Optional[float] = None):
+    def __init__(self, name: str, value: Optional[float] = None, uid: Optional[int] = None):
         super(TegVariable, self).__init__(children=[])
         self.name = name
         self.value = value
-        self.uid = TegVariable.global_uid
-        TegVariable.global_uid += 1
+        if uid is None:
+            self.uid = TegVariable.global_uid
+            TegVariable.global_uid += 1
+        else:
+            self.uid = uid
 
-    def bind_variable(self, var_name: str, value: Optional[float]) -> None:
-        if self.name == var_name:
+    def bind_variable(self, var: 'TegVariable', value: Optional[float] = None) -> None:
+        if (self.name, self.uid) == (var.name, var.uid):
             self.value = value
 
 
@@ -36,7 +36,7 @@ class TegConstant(TegVariable):
     def __init__(self, value: Optional[float], name: str = ''):
         super(TegConstant, self).__init__(name=name, value=value)
 
-    def bind_variable(self, var_name: str, value: Optional[float]) -> None:
+    def bind_variable(self, var: TegVariable, value: Optional[float] = None) -> None:
         pass
 
 
@@ -60,9 +60,10 @@ class TegIntegral(Teg):
 
 class TegConditional(Teg):
 
-    def __init__(self, var1: TegVariable, var2: TegVariable, if_body: Teg, else_body: Teg, allow_eq: bool = False):
-        super(TegConditional, self).__init__(children=[var1, var2, if_body, else_body])
-        self.var1, self.var2, self.if_body, self.else_body = self.children
+    def __init__(self, lt_expr: Teg, if_body: Teg, else_body: Teg, allow_eq: bool = False):
+        super(TegConditional, self).__init__(children=[lt_expr, if_body, else_body])
+        assert isinstance(allow_eq, bool)
+        self.lt_expr, self.if_body, self.else_body = self.children
         self.allow_eq = allow_eq
 
 

@@ -18,14 +18,14 @@ from substitute import substitute
 
 def reverse_deriv_transform(expr: Teg,
                             out_deriv_vals: TegTuple,
-                            not_ctx: Set[str]) -> Iterable[Tuple[str, Teg]]:
+                            not_ctx: Set[Tuple[str, int]]) -> Iterable[Tuple[Tuple[str, int], Teg]]:
 
     if isinstance(expr, TegConstant):
         yield from []
 
     elif isinstance(expr, TegVariable):
-        if expr.name not in not_ctx:
-            yield (f'd{expr.name}', out_deriv_vals)
+        if (expr.name, expr.uid) not in not_ctx:
+            yield ((f'd{expr.name}', expr.uid), out_deriv_vals)
         yield from []
 
     elif isinstance(expr, TegAdd):
@@ -41,48 +41,49 @@ def reverse_deriv_transform(expr: Teg,
     elif isinstance(expr, TegConditional):
         derivs_if = reverse_deriv_transform(expr.if_body, TegConstant(1), not_ctx)
         derivs_else = reverse_deriv_transform(expr.else_body, TegConstant(1), not_ctx)
-        yield from ((name, out_deriv_vals * TegConditional(expr.var1, expr.var2, deriv_if, TegConstant(0)))
-                    for name, deriv_if in derivs_if)
-        yield from ((name, out_deriv_vals * TegConditional(expr.var1, expr.var2, TegConstant(0), deriv_else))
-                    for name, deriv_else in derivs_else)
+        yield from ((name_uid, out_deriv_vals * TegConditional(expr.lt_expr, deriv_if, TegConstant(0)))
+                    for name_uid, deriv_if in derivs_if)
+        yield from ((name_uid, out_deriv_vals * TegConditional(expr.lt_expr, TegConstant(0), deriv_else))
+                    for name_uid, deriv_else in derivs_else)
 
     elif isinstance(expr, TegIntegral):
-        not_ctx.discard(expr.dvar.name)
+        not_ctx.discard((expr.dvar.name, expr.dvar.uid))
         moving_var_data = delta_contribution(expr, not_ctx)
-        yield from ((name, out_deriv_vals * delta_val) for name, delta_val in moving_var_data.values())
+        yield from (((dname, uid), out_deriv_vals * delta_val)
+                    for (name, uid), (dname, delta_val) in moving_var_data.items())
 
         # Apply Leibniz rule directly for moving boundaries
         lower_derivs = reverse_deriv_transform(expr.lower, out_deriv_vals, not_ctx)
         upper_derivs = reverse_deriv_transform(expr.upper, out_deriv_vals, not_ctx)
-        yield from ((name, upper_deriv * substitute(expr.body, expr.dvar, upper_deriv))
-                    for name, upper_deriv in upper_derivs)
-        yield from ((name, - lower_deriv * substitute(expr.body, expr.dvar, lower_deriv))
-                    for name, lower_deriv in lower_derivs)
+        yield from ((name_uid, upper_deriv * substitute(expr.body, expr.dvar, upper_deriv))
+                    for name_uid, upper_deriv in upper_derivs)
+        yield from ((name_uid, - lower_deriv * substitute(expr.body, expr.dvar, lower_deriv))
+                    for name_uid, lower_deriv in lower_derivs)
 
-        not_ctx.add(expr.dvar.name)
+        not_ctx.add((expr.dvar.name, expr.dvar.uid))
         deriv_body_traces = reverse_deriv_transform(expr.body, TegConstant(1), not_ctx)
-        yield from ((name, out_deriv_vals * TegIntegral(expr.lower, expr.upper, deriv_body, expr.dvar))
-                    for name, deriv_body in deriv_body_traces)
+        yield from ((name_uid, out_deriv_vals * TegIntegral(expr.lower, expr.upper, deriv_body, expr.dvar))
+                    for name_uid, deriv_body in deriv_body_traces)
 
     elif isinstance(expr, TegTuple):
         yield [reverse_deriv_transform(child, out_deriv_vals, not_ctx)
                for child in expr]
 
     elif isinstance(expr, TegLetIn):
-        # NOTE: There's likely a cleaner way of doing this.
-        # Evaluate each of the expressions in the body
-        body_derivs = {f'd{var.name}': reverse_deriv_transform(e, TegConstant(1), not_ctx)
-                       for var, e in zip(expr.new_vars, expr.new_exprs)}
-        new_var_names = {f'd{var.name}' for var in expr.new_vars}
+        # Include derivatives of each expression to the let body
+        dnew_vars, body_derivs = set(), {}
+        for var, e in zip(expr.new_vars, expr.new_exprs):
+            dname = f'd{var.name}'
+            dnew_vars.add(dname)
+            body_derivs[dname] = reverse_deriv_transform(e, TegConstant(1), not_ctx)
 
         # Thread through derivatives of each subexpression
-        for name, dname_expr in reverse_deriv_transform(expr.expr, out_deriv_vals, not_ctx):
+        for (name, uid), dname_expr in reverse_deriv_transform(expr.expr, out_deriv_vals, not_ctx):
             dvar_with_ctx = TegLetIn(expr.new_vars, expr.new_exprs, dname_expr)
-            if name in new_var_names:
-                yield from ((n, d * dvar_with_ctx)
-                            for n, d in body_derivs[name])
+            if name in dnew_vars:
+                yield from ((n, d * dvar_with_ctx) for n, d in body_derivs[name])
             else:
-                yield (name, dvar_with_ctx)
+                yield ((name, uid), dvar_with_ctx)
 
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported derivative.')
@@ -104,10 +105,11 @@ def reverse_deriv(expr: Teg, out_deriv_vals: TegTuple) -> Teg:
         partial_deriv_map = defaultdict(lambda: TegConstant(0))
 
         # After deriv_transform, expr will have unbound infinitesimals
-        for name, e in reverse_deriv_transform(expr, single_outval, set()):
-            partial_deriv_map[name] += e
+        for name_uid, e in reverse_deriv_transform(expr, single_outval, set()):
+            partial_deriv_map[name_uid] += e
 
-        new_vars = [TegVariable(var_name) for var_name in partial_deriv_map.keys()]
+        # Introduce fresh variables for each partial derivative
+        new_vars = [TegVariable(var_name) for var_name, var_uid in partial_deriv_map.keys()]
         new_vals = [*partial_deriv_map.values()]
 
         assert len(new_vals) > 0, 'There must be variables to compute derivatives. '
@@ -125,5 +127,4 @@ def reverse_deriv(expr: Teg, out_deriv_vals: TegTuple) -> Teg:
         derivs = (derivs_for_single_outval(e, single_outval, i)
                   for i, (e, single_outval) in enumerate(zip(expr, out_deriv_vals)))
         derivs = TegTuple(*derivs)
-
     return derivs

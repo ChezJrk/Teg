@@ -25,11 +25,11 @@ def evaluate(expr: Teg, num_samples: int = 50, ignore_cache: bool = False):
         expr.value = expr.value
 
     elif isinstance(expr, (TegAdd, TegMul)):
-        # import ipdb; ipdb.set_trace()
         expr.value = expr.operation(*[evaluate(e, num_samples, ignore_cache) for e in expr.children])
 
     elif isinstance(expr, TegConditional):
-        body = expr.if_body if expr.var1 < expr.var2 or (expr.allow_eq and expr.var1 == expr.var2) else expr.else_body
+        lt_val = evaluate(expr.lt_expr, num_samples, ignore_cache)
+        body = expr.if_body if lt_val < 0 or (expr.allow_eq and lt_val == 0) else expr.else_body
         expr.value = evaluate(body, num_samples, ignore_cache)
 
     elif isinstance(expr, TegIntegral):
@@ -41,7 +41,7 @@ def evaluate(expr: Teg, num_samples: int = 50, ignore_cache: bool = False):
         # Sample different values of the variable (dvar) and evaluate
         # Currently do NON-DIFFERENTIABLE uniform sampling
         def compute_samples(var_sample):
-            expr.body.bind_variable(expr.dvar.name, var_sample)
+            expr.body.bind_variable(expr.dvar, var_sample)
             return evaluate(expr.body, num_samples, ignore_cache=True)
 
         var_samples, step = np.linspace(lower, upper, num_samples, retstep=True)
@@ -63,7 +63,7 @@ def evaluate(expr: Teg, num_samples: int = 50, ignore_cache: bool = False):
     elif isinstance(expr, TegLetIn):
         for var, e in zip(expr.new_vars, expr.new_exprs):
             var_val = evaluate(e, num_samples, ignore_cache)
-            expr.expr.bind_variable(var.name, var_val)
+            expr.expr.bind_variable(var, var_val)
         expr.value = evaluate(expr.expr, num_samples, ignore_cache)
 
     elif isinstance(expr, (TegFwdDeriv, TegReverseDeriv)):

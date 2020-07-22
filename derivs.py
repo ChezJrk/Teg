@@ -14,6 +14,9 @@ class TegFwdDeriv(Teg):
     def __str__(self):
         return f'fwd_deriv({self.expr}, {self.context})'
 
+    def __eq__(self, other):
+        return type(self) == other and self.expr == other.expr
+
 
 class TegReverseDeriv(Teg):
 
@@ -25,3 +28,6 @@ class TegReverseDeriv(Teg):
 
     def __str__(self):
         return f'reverse_deriv({self.expr}, {self.out_deriv_vals})'
+
+    def __eq__(self, other):
+        return type(self) == other and self.expr == other.expr
