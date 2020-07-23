@@ -1,47 +1,47 @@
 from integrable_program import (
+    ITeg,
+    Const,
+    Var,
+    Add,
+    Mul,
+    Cond,
     Teg,
-    TegConstant,
-    TegVariable,
-    TegAdd,
-    TegMul,
-    TegConditional,
-    TegIntegral,
-    TegTuple,
-    TegLetIn,
+    Tup,
+    LetIn,
 )
-from derivs import TegFwdDeriv, TegReverseDeriv
+from derivs import FwdDeriv, RevDeriv
 import operator_overloads  # noqa: F401
 
 
-def simplify(expr: Teg) -> Teg:
+def simplify(expr: ITeg) -> ITeg:
 
-    if isinstance(expr, TegVariable):
+    if isinstance(expr, Var):
         return expr
 
-    elif isinstance(expr, TegAdd):
+    elif isinstance(expr, Add):
         expr1, expr2 = expr.children
         simple1, simple2 = simplify(expr1), simplify(expr2)
-        if isinstance(simple1, TegVariable) and simple1.value == 0:
+        if isinstance(simple1, Var) and simple1.value == 0:
             return simple2
-        if isinstance(simple2, TegVariable) and simple2.value == 0:
+        if isinstance(simple2, Var) and simple2.value == 0:
             return simple1
         return simple1 + simple2
 
-    elif isinstance(expr, TegMul):
+    elif isinstance(expr, Mul):
         expr1, expr2 = expr.children
         simple1, simple2 = simplify(expr1), simplify(expr2)
-        if ((isinstance(simple1, TegVariable) and simple1.value == 0)
-                or (isinstance(simple2, TegVariable) and hasattr(simple2, 'value') and simple2.value == 0)):
-            return TegConstant(0)
-        if isinstance(simple1, TegVariable) and simple1.value == 1:
+        if ((isinstance(simple1, Var) and simple1.value == 0)
+                or (isinstance(simple2, Var) and hasattr(simple2, 'value') and simple2.value == 0)):
+            return Const(0)
+        if isinstance(simple1, Var) and simple1.value == 1:
             return simple2
-        if isinstance(simple2, TegVariable) and simple2.value == 1:
+        if isinstance(simple2, Var) and simple2.value == 1:
             return simple1
         return simple1 * simple2
 
-    elif isinstance(expr, TegConditional):
+    elif isinstance(expr, Cond):
         lt_expr, if_body, else_body = simplify(expr.lt_expr), simplify(expr.if_body), simplify(expr.else_body)
-        if (isinstance(if_body, TegConstant) and isinstance(else_body, TegConstant)
+        if (isinstance(if_body, Const) and isinstance(else_body, Const)
                 and if_body.value == 0 and else_body.value == 0):
             return if_body
 
@@ -56,21 +56,21 @@ def simplify(expr: Teg) -> Teg:
         except AttributeError:
             pass
 
-        return TegConditional(lt_expr, if_body, else_body, allow_eq=expr.allow_eq)
+        return Cond(lt_expr, if_body, else_body, allow_eq=expr.allow_eq)
 
-    elif isinstance(expr, TegIntegral):
+    elif isinstance(expr, Teg):
         body = simplify(expr.body)
-        if isinstance(body, TegVariable) and hasattr(body, 'value') and body.value == 0:
-            return TegConstant(0)
-        return TegIntegral(expr.lower, expr.upper, body, expr.dvar)
+        if isinstance(body, Var) and hasattr(body, 'value') and body.value == 0:
+            return Const(0)
+        return Teg(expr.lower, expr.upper, body, expr.dvar)
 
-    elif isinstance(expr, TegTuple):
-        return TegTuple(*(simplify(child) for child in expr))
+    elif isinstance(expr, Tup):
+        return Tup(*(simplify(child) for child in expr))
 
-    elif isinstance(expr, TegLetIn):
-        return TegLetIn(expr.new_vars, TegTuple(*(simplify(e) for e in expr.new_exprs)), simplify(expr.expr))
+    elif isinstance(expr, LetIn):
+        return LetIn(expr.new_vars, Tup(*(simplify(e) for e in expr.new_exprs)), simplify(expr.expr))
 
-    elif isinstance(expr, (TegFwdDeriv, TegReverseDeriv)):
+    elif isinstance(expr, (FwdDeriv, RevDeriv)):
         return simplify(expr.deriv_expr)
 
     else:

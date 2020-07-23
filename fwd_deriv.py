@@ -4,69 +4,69 @@ from copy import deepcopy
 from collections import defaultdict
 
 from integrable_program import (
+    ITeg,
+    Const,
+    Var,
+    Add,
+    Mul,
+    Cond,
     Teg,
-    TegConstant,
-    TegVariable,
-    TegAdd,
-    TegMul,
-    TegConditional,
-    TegIntegral,
-    TegTuple,
-    TegLetIn,
-    TegContext,
+    Tup,
+    LetIn,
+    Ctx,
 )
 from substitute import substitute
 
 
-def extract_constants_from_affine(expr: Teg) -> List[Teg]:
+def extract_constants_from_affine(expr: ITeg) -> List[ITeg]:
 
-    if isinstance(expr, TegConstant):
+    if isinstance(expr, Const):
         return [expr]
 
-    elif isinstance(expr, TegVariable):
+    elif isinstance(expr, Var):
         return []
 
-    elif isinstance(expr, (TegAdd, TegMul)):
+    elif isinstance(expr, (Add, Mul)):
         return extract_constants_from_affine(expr.children[0]) + extract_constants_from_affine(expr.children[1])
 
     else:
         raise ValueError(f'The expression of type "{type(expr)}" results in a computation that is not affine.')
 
 
-def extract_variables_from_affine(expr: Teg) -> Dict[Tuple[str, int], Teg]:
+def extract_variables_from_affine(expr: ITeg) -> Dict[Tuple[str, int], ITeg]:
 
-    if isinstance(expr, TegConstant):
+    if isinstance(expr, Const):
         return {}
 
-    elif isinstance(expr, TegVariable):
+    elif isinstance(expr, Var):
         return {(expr.name, expr.uid): expr}
 
-    elif isinstance(expr, (TegAdd, TegMul)):
+    elif isinstance(expr, (Add, Mul)):
         return {**extract_variables_from_affine(expr.children[0]), **extract_variables_from_affine(expr.children[1])}
 
     else:
         raise ValueError(f'The expression of type "{type(expr)}" results in a computation that is not affine.')
 
 
-def solve_for_dvar(expr: Teg, var: Teg):
+def solve_for_dvar(expr: ITeg, var: ITeg):
 
-    def flatten_to_nary_add(expr: Teg) -> List[Teg]:
+    def flatten_to_nary_add(expr: ITeg) -> List[ITeg]:
 
-        if isinstance(expr, (TegVariable, TegMul)):
+        if isinstance(expr, (Var, Mul)):
             return [expr]
 
-        elif isinstance(expr, TegAdd):
+        elif isinstance(expr, Add):
             return [e for ex in expr.children for e in flatten_to_nary_add(ex)]
 
         else:
             raise ValueError(f'The expression of type "{type(expr)}" results in a computation that is not affine.')
 
-    def prod(l: List[Teg]) -> Teg:
+    def prod(l: List[ITeg]) -> ITeg:
         # NOTE: Butchering constants...
         return reduce(lambda x, y: x * y, [c.value for c in l], 1)
 
     # Combine all common terms in the constant vector pairs
-    d, consts = {}, []
+    d, const = {}, 0
     for e in flatten_to_nary_add(expr):
         vs = extract_variables_from_affine(e).values()
         cs = extract_constants_from_affine(e)
@@ -77,32 +77,35 @@ def solve_for_dvar(expr: Teg, var: Teg):
                 d[(v.name, v.uid)] = (d[(v.name, v.uid)][0] + cs, v)
             else:
                 d[(v.name, v.uid)] = cs, v
-        else:
-            consts += cs
+        elif len(cs) > 0:
+            const += prod(cs)
 
     # Remove var_name and negate all constants
     cks, vs = d.pop((var.name, var.uid))
     ck_val = prod(cks)
 
-    inverse = TegConstant(0)
+    inverse = Const(0)
     for cs, v in d.values():
-        inverse += TegConstant(-prod(cs) / ck_val) * v
-    if len(consts) > 0:
-        inverse += TegConstant(-prod(consts) / ck_val)
+        inverse += Const(-prod(cs) / ck_val) * v
+
+    inverse += -const / ck_val
+    # if len(consts) > 0:
+    # inverse += Const(const.value / ck_val)
+    # import ipdb; ipdb.set_trace()
     return inverse
 
 
-def extract_moving_discontinuities(expr: Teg,
-                                   var: TegVariable,
+def extract_moving_discontinuities(expr: ITeg,
+                                   var: Var,
                                    not_ctx: Set[Tuple[str, int]],
-                                   banned_variables: Set[Tuple[(str, int)]]) -> Iterable[Tuple[Teg, Teg]]:
+                                   banned_variables: Set[Tuple[(str, int)]]) -> Iterable[Tuple[ITeg, ITeg]]:
     """Identify all subexpressions producing a moving discontinuity.
 
     Concretely, this means finding each branching statement including
     the integration variable and a variable defined in an outside context.
     """
 
-    if isinstance(expr, TegConditional):
+    if isinstance(expr, Cond):
         var_name_var_in_cond = extract_variables_from_affine(expr.lt_expr)
         moving_var_name_uids = var_name_var_in_cond.keys() - not_ctx - {(var.name, var.uid)}
 
@@ -114,16 +117,16 @@ def extract_moving_discontinuities(expr: Teg,
             # if dvar=x and the condition is x<t then returns (expr, t)
             yield from ((expr,  var_name_var_in_cond[moving_var_name]) for moving_var_name in moving_var_name_uids)
 
-    elif isinstance(expr, TegIntegral):
+    elif isinstance(expr, Teg):
         banned_variables.add((expr.dvar.name, expr.dvar.uid))
 
     yield from (moving_cond for child in expr.children
                 for moving_cond in extract_moving_discontinuities(child, var, not_ctx, banned_variables))
 
 
-def delta_contribution(expr: TegIntegral,
+def delta_contribution(expr: Teg,
                        not_ctx: Set[Tuple[str, int]]
-                       ) -> Dict[Tuple[str, int], Tuple[Tuple[str, int], Teg]]:
+                       ) -> Dict[Tuple[str, int], Tuple[Tuple[str, int], ITeg]]:
     """Given an expression for the integral, generate an expression for the derivative of jump discontinuities. """
     moving_discontinuities = extract_moving_discontinuities(expr.body, expr.dvar, not_ctx.copy(), set())
 
@@ -155,20 +158,20 @@ def delta_contribution(expr: TegIntegral,
         expr_body_left = substitute(expr_body_left, expr.dvar, expr_for_dvar)
 
         # if lower < dvar < upper, include the contribution from the discontinuity (x=t+ - x=t-)
-        moving_var_delta = TegConditional(expr_for_dvar - expr.upper,
-                                          TegConditional(expr.lower - expr_for_dvar,
+        moving_var_delta = Cond(expr_for_dvar - expr.upper,
+                                          Cond(expr.lower - expr_for_dvar,
                                                          expr_body_right - expr_body_left,
-                                                         TegConstant(0)),
-                                          TegConstant(0))
+                                                         Const(0)),
+                                          Const(0))
         moving_var_data[(moving_var.name, moving_var.uid)] = (f'd{moving_var.name}', moving_var_delta)
 
     return moving_var_data
 
 
-def boundary_contribution(expr: Teg,
-                          ctx: Dict[Tuple[str, int], Teg],
+def boundary_contribution(expr: ITeg,
+                          ctx: Dict[Tuple[str, int], ITeg],
                           not_ctx: Set[Tuple[str, int]]
-                          ) -> Tuple[Teg, Dict[Tuple[str, int], str], Set[Tuple[str, int]]]:
+                          ) -> Tuple[ITeg, Dict[Tuple[str, int], str], Set[Tuple[str, int]]]:
     """ Apply Leibniz rule directly for moving boundaries. """
     lower_deriv, ctx1, not_ctx1 = fwd_deriv_transform(expr.lower, ctx, not_ctx)
     upper_deriv, ctx2, not_ctx2 = fwd_deriv_transform(expr.upper, ctx, not_ctx)
@@ -178,36 +181,36 @@ def boundary_contribution(expr: Teg,
     return boundary_val, {**ctx1, **ctx2}, not_ctx1 | not_ctx2
 
 
-def fwd_deriv_transform(expr: Teg,
-                        ctx: Dict[Tuple[str, int], Teg],
-                        not_ctx: Set[Tuple[str, int]]) -> Tuple[Teg, Dict[Tuple[str, int], str], Set[Tuple[str, int]]]:
+def fwd_deriv_transform(expr: ITeg,
+                        ctx: Dict[Tuple[str, int], ITeg],
+                        not_ctx: Set[Tuple[str, int]]) -> Tuple[ITeg, Dict[Tuple[str, int], str], Set[Tuple[str, int]]]:
     """Compute the source-to-source foward derivative of the given expression. """
 
-    if isinstance(expr, TegConstant):
-        expr = TegConstant(0)
+    if isinstance(expr, Const):
+        expr = Const(0)
 
-    elif isinstance(expr, TegVariable):
+    elif isinstance(expr, Var):
         # NOTE: No expressions with the name "d{expr.name}" are allowed
         if (expr.name, expr.uid) not in not_ctx:
             if (expr.name, expr.uid) not in ctx:
                 # Introduce derivative and leave the value unbound
-                var = TegVariable(f'd{expr.name}')
+                var = Var(f'd{expr.name}')
                 ctx[(expr.name, expr.uid)] = var
             else:
                 # Use the old derivative
                 var = ctx[(expr.name, expr.uid)]
             expr = var
         else:
-            expr = TegConstant(0)
+            expr = Const(0)
 
-    elif isinstance(expr, TegAdd):
+    elif isinstance(expr, Add):
         def union(out1, out2):
             e1, ctx1, not_ctx1 = out1
             e2, ctx2, not_ctx2 = out2
             return expr.operation(e1, e2), {**ctx1, **ctx2}, not_ctx1 | not_ctx2
         expr, ctx, not_ctx = reduce(union, (fwd_deriv_transform(child, ctx, not_ctx) for child in expr.children))
 
-    elif isinstance(expr, TegMul):
+    elif isinstance(expr, Mul):
         # NOTE: Consider n-ary multiplication.
         expr1, expr2 = [child for child in expr.children]
         deriv = [fwd_deriv_transform(child, ctx, not_ctx) for child in expr.children]
@@ -216,14 +219,14 @@ def fwd_deriv_transform(expr: Teg,
         ctx = {**ctx1, **ctx2}
         not_ctx = not_ctx1 | not_ctx2
 
-    elif isinstance(expr, TegConditional):
+    elif isinstance(expr, Cond):
         if_body, ctx1, not_ctx1 = fwd_deriv_transform(expr.if_body, ctx, not_ctx)
         else_body, ctx2, not_ctx2 = fwd_deriv_transform(expr.else_body, ctx, not_ctx)
         ctx = {**ctx1, **ctx2}
         not_ctx = not_ctx1 | not_ctx2
-        expr = TegConditional(expr.lt_expr, if_body, else_body)
+        expr = Cond(expr.lt_expr, if_body, else_body)
 
-    elif isinstance(expr, TegIntegral):
+    elif isinstance(expr, Teg):
         assert expr.dvar not in ctx, f'Names of infinitesimal "{expr.dvar}" are distinct from context "{ctx}"'
         not_ctx.discard(expr.dvar.name)
 
@@ -233,36 +236,36 @@ def fwd_deriv_transform(expr: Teg,
         # Include derivative contribution from delta functions produced as a result
         # of taking derivatives of discontinuities
         moving_var_data = delta_contribution(expr, not_ctx)
-        delta_val = TegConstant(0)
+        delta_val = Const(0)
         for name_uid, (new_name, val) in moving_var_data.items():
             if name_uid not in ctx:
-                ctx[name_uid] = TegVariable(new_name)
+                ctx[name_uid] = Var(new_name)
             delta_val += ctx[name_uid] * val
 
         not_ctx.add((expr.dvar.name, expr.dvar.uid))
         body, ctx, not_ctx = fwd_deriv_transform(expr.body, ctx, not_ctx)
         ctx.update(new_ctx)
         not_ctx |= new_not_ctx
-        expr = TegIntegral(expr.lower, expr.upper, body, expr.dvar) + delta_val + boundary_val
+        expr = Teg(expr.lower, expr.upper, body, expr.dvar) + delta_val + boundary_val
 
-    elif isinstance(expr, TegTuple):
-        new_expr_list, new_ctx, new_not_ctx = [], TegContext(), set()
+    elif isinstance(expr, Tup):
+        new_expr_list, new_ctx, new_not_ctx = [], Ctx(), set()
         for child in expr:
             child, ctx, not_ctx = fwd_deriv_transform(child, ctx, not_ctx)
             new_expr_list.append(child)
             new_ctx.update(ctx)
             new_not_ctx |= not_ctx
         ctx, not_ctx = new_ctx, new_not_ctx
-        expr = TegTuple(*new_expr_list)
+        expr = Tup(*new_expr_list)
 
-    elif isinstance(expr, TegLetIn):
+    elif isinstance(expr, LetIn):
 
         # Compute derivatives of each expression and bind them to the corresponding dvar
         new_vars_with_derivs, new_exprs_with_derivs = list(expr.new_vars), list(expr.new_exprs)
         for v, e in zip(expr.new_vars, expr.new_exprs):
             # By not passing in the updated contexts, require independence of exprs in the body of the let expression
             de, ctx, not_ctx = fwd_deriv_transform(e, ctx, not_ctx)
-            ctx[(v.name, v.uid)] = TegVariable(f'd{v.name}')
+            ctx[(v.name, v.uid)] = Var(f'd{v.name}')
             new_vars_with_derivs.append(ctx[(v.name, v.uid)])
             new_exprs_with_derivs.append(de)
 
@@ -272,7 +275,7 @@ def fwd_deriv_transform(expr: Teg,
         dexpr, ctx, not_ctx = fwd_deriv_transform(expr.expr, ctx, not_ctx)
         [ctx.pop((c.name, c.uid), None) for c in expr.new_vars]
 
-        expr = TegLetIn(TegTuple(*new_vars_with_derivs), TegTuple(*new_exprs_with_derivs), dexpr)
+        expr = LetIn(Tup(*new_vars_with_derivs), Tup(*new_exprs_with_derivs), dexpr)
 
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported fwd_derivative.')
@@ -280,7 +283,7 @@ def fwd_deriv_transform(expr: Teg,
     return expr, ctx, not_ctx
 
 
-def fwd_deriv(expr: Teg, bindings: List[Tuple[Teg, int]]) -> Teg:
+def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]]) -> ITeg:
     """Computes the fwd_derivative of a given expression.
 
     Args:

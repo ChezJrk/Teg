@@ -1,38 +1,38 @@
 import numpy as np
 
 from integrable_program import (
+    ITeg,
+    Const,
+    Var,
+    Add,
+    Mul,
+    Cond,
     Teg,
-    TegConstant,
-    TegVariable,
-    TegAdd,
-    TegMul,
-    TegConditional,
-    TegIntegral,
-    TegTuple,
-    TegLetIn,
+    Tup,
+    LetIn,
 )
-from derivs import TegFwdDeriv, TegReverseDeriv
+from derivs import FwdDeriv, RevDeriv
 
 
-def evaluate(expr: Teg, num_samples: int = 50, ignore_cache: bool = False):
+def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
 
     if expr.value is not None and not ignore_cache:
-        if isinstance(expr, TegVariable):
+        if isinstance(expr, Var):
             assert expr.value is not None, f'The variable "{expr.name}" must be bound to a value prior to evaluation.'
         return expr.value
 
-    if isinstance(expr, (TegConstant, TegVariable)):
+    if isinstance(expr, (Const, Var)):
         expr.value = expr.value
 
-    elif isinstance(expr, (TegAdd, TegMul)):
+    elif isinstance(expr, (Add, Mul)):
         expr.value = expr.operation(*[evaluate(e, num_samples, ignore_cache) for e in expr.children])
 
-    elif isinstance(expr, TegConditional):
+    elif isinstance(expr, Cond):
         lt_val = evaluate(expr.lt_expr, num_samples, ignore_cache)
         body = expr.if_body if lt_val < 0 or (expr.allow_eq and lt_val == 0) else expr.else_body
         expr.value = evaluate(body, num_samples, ignore_cache)
 
-    elif isinstance(expr, TegIntegral):
+    elif isinstance(expr, Teg):
         lower = evaluate(expr.lower, num_samples, ignore_cache)
         upper = evaluate(expr.upper, num_samples, ignore_cache)
 
@@ -57,16 +57,16 @@ def evaluate(expr: Teg, num_samples: int = 50, ignore_cache: bool = False):
         y_right = body_at_samples[1:]  # right endpoints
         expr.value = (1 if lower < upper else -1) * step * np.sum(y_left + y_right, 0) / 2
 
-    elif isinstance(expr, TegTuple):
+    elif isinstance(expr, Tup):
         expr.value = np.array([evaluate(e, num_samples, ignore_cache) for e in expr])
 
-    elif isinstance(expr, TegLetIn):
+    elif isinstance(expr, LetIn):
         for var, e in zip(expr.new_vars, expr.new_exprs):
             var_val = evaluate(e, num_samples, ignore_cache)
             expr.expr.bind_variable(var, var_val)
         expr.value = evaluate(expr.expr, num_samples, ignore_cache)
 
-    elif isinstance(expr, (TegFwdDeriv, TegReverseDeriv)):
+    elif isinstance(expr, (FwdDeriv, RevDeriv)):
         expr.value = evaluate(expr.deriv_expr, num_samples, ignore_cache)
 
     else:

@@ -1,6 +1,6 @@
 import unittest
 
-from integrable_program import TegIntegral, TegVariable, TegConditional, TegConstant, TegTuple, TegLetIn
+from integrable_program import Teg, Var, Cond, Const, Tup, LetIn
 from fwd_deriv import fwd_deriv
 from reverse_deriv import reverse_deriv
 from evaluate import evaluate
@@ -10,7 +10,7 @@ import operator_overloads  # noqa: F401
 class TestForwardDerivatives(unittest.TestCase):
 
     def test_deriv_basics(self):
-        x = TegVariable('x', 1)
+        x = Var('x', 1)
         f = x + x
         deriv_expr = fwd_deriv(f, [(x, 1)])
         # df(x=1)/dx
@@ -22,10 +22,8 @@ class TestForwardDerivatives(unittest.TestCase):
         self.assertEqual(evaluate(deriv_expr), 2)
 
     def test_deriv_poly(self):
-        x = TegVariable('x', 1)
-        c1 = TegConstant(1)
-        c2 = TegConstant(3)
-        f = c1 * x**3 + c2 * x**2 + c2 * x + c1
+        x = Var('x', 1)
+        f = 1 * x**3 + 3 * x**2 + 3 * x + 1
         # df(x=1)/dx
         deriv_expr = fwd_deriv(f, [(x, 1)])
         self.assertEqual(evaluate(deriv_expr), 12)
@@ -36,9 +34,9 @@ class TestForwardDerivatives(unittest.TestCase):
         self.assertEqual(evaluate(deriv_expr, ignore_cache=True), 0)
 
     def test_deriv_branch(self):
-        x = TegVariable('x')
-        theta = TegVariable('theta', 1)
-        f = TegConditional(x, theta, theta * theta)
+        x = Var('x')
+        theta = Var('theta', 1)
+        f = Cond(x, theta, theta * theta)
 
         deriv_expr = fwd_deriv(f, [(theta, 1)])
         x.bind_variable(x, 1)
@@ -50,12 +48,12 @@ class TestForwardDerivatives(unittest.TestCase):
         self.assertAlmostEqual(evaluate(deriv_expr, ignore_cache=True), 1)
 
     def test_deriv_integral(self):
-        a = TegConstant(name='a', value=0)
-        b = TegConstant(name='b', value=1)
+        a = Const(name='a', value=0)
+        b = Const(name='b', value=1)
 
-        x = TegVariable('x')
-        theta = TegVariable('theta', 5)
-        f = TegIntegral(a, b, x * theta, x)
+        x = Var('x')
+        theta = Var('theta', 5)
+        f = Teg(a, b, x * theta, x)
 
         deriv_expr = fwd_deriv(f, [(theta, 1)])
 
@@ -63,21 +61,21 @@ class TestForwardDerivatives(unittest.TestCase):
         self.assertAlmostEqual(evaluate(deriv_expr), 0.5)
 
     def test_deriv_integral_branch_poly(self):
-        a = TegConstant(name='a', value=0)
-        b = TegConstant(name='b', value=1)
+        a = Const(name='a', value=0)
+        b = Const(name='b', value=1)
 
-        theta1 = TegVariable('theta1', -1)
-        theta2 = TegVariable('theta2', 1)
+        theta1 = Var('theta1', -1)
+        theta2 = Var('theta2', 1)
         # g = \int_a^b if(x<0.5) x*theta1 else 1 dx
         # h = \int_a^b x*theta2 + x^2theta1^2 dx
-        x = TegVariable('x')
-        body = TegConditional(x - TegConstant(0.5), x * theta1, b)
-        g = TegIntegral(a, b, body, x)
-        h = TegIntegral(a, b, x * theta2 + x**2 * theta1**2, x)
+        x = Var('x')
+        body = Cond(x - Const(0.5), x * theta1, b)
+        g = Teg(a, b, body, x)
+        h = Teg(a, b, x * theta2 + x**2 * theta1**2, x)
 
-        y = TegVariable('y', 0)
+        y = Var('y', 0)
         # if(y < 1) g else h
-        f = TegConditional(y - TegConstant(1), g, h)
+        f = Cond(y - Const(1), g, h)
 
         # df/d(theta1)
         deriv_expr = fwd_deriv(f, [(theta1, 1), (theta2, 0)])
@@ -95,16 +93,16 @@ class TestForwardDerivatives(unittest.TestCase):
         self.assertAlmostEqual(evaluate(deriv_expr, ignore_cache=True), 1/2, places=3)
 
     def test_deriv_tuple(self):
-        x = TegVariable('x', 1)
-        y = TegVariable('y', 1)
-        t = TegVariable('t')
-        a = TegConstant(0)
-        b = TegConstant(1)
+        x = Var('x', 1)
+        y = Var('y', 1)
+        t = Var('t')
+        a = Const(0)
+        b = Const(1)
 
-        cond = TegConditional(x - a, x, y)
-        integral = TegIntegral(a, b, t * x, t)
+        cond = Cond(x - a, x, y)
+        integral = Teg(a, b, t * x, t)
 
-        f = TegTuple(x, x + x, x * x, x + y, x * y, cond, integral)
+        f = Tup(x, x + x, x * x, x + y, x * y, cond, integral)
         deriv_expr = fwd_deriv(f, [(x, 1), (y, 0)])
 
         expected = [1, 2, 2, 1, 1, 0, 0.5]
@@ -117,20 +115,20 @@ class TestForwardDerivatives(unittest.TestCase):
             self.assertAlmostEqual(res, exp)
 
     def test_deriv_let_in(self):
-        x1 = TegVariable('x1')
-        x2 = TegVariable('x2')
+        x1 = Var('x1')
+        x2 = Var('x2')
 
-        y = TegVariable('y', 1)
-        z = TegVariable('z', 2)
+        y = Var('y', 1)
+        z = Var('z', 2)
 
         # let x1 = y + z
         #     x2 = y * z in
         # w = x1 + x2 * y
-        new_vars = TegTuple(x1, x2)
-        new_exprs = TegTuple(y + z, y * z)
+        new_vars = Tup(x1, x2)
+        new_exprs = Tup(y + z, y * z)
 
         expr = x1 + x2 * y
-        letin = TegLetIn(new_vars, new_exprs, expr)
+        letin = LetIn(new_vars, new_exprs, expr)
         deriv_expr = fwd_deriv(letin, [(y, 0), (z, 1)])
         self.assertEqual(evaluate(deriv_expr), 2)
 
@@ -141,10 +139,10 @@ class TestForwardDerivatives(unittest.TestCase):
 class TestReverseDerivatives(unittest.TestCase):
 
     def setUp(self):
-        self.single_out_deriv = TegTuple(TegConstant(1))
+        self.single_out_deriv = Tup(Const(1))
 
     def test_deriv_basics(self):
-        x = TegVariable('x', 1)
+        x = Var('x', 1)
         f = x + x
         deriv_expr = reverse_deriv(f, self.single_out_deriv)
         # df(x=1)/dx
@@ -156,9 +154,9 @@ class TestReverseDerivatives(unittest.TestCase):
         self.assertEqual(evaluate(deriv_expr), 2)
 
     def test_deriv_poly(self):
-        x = TegVariable('x', 1)
-        c1 = TegConstant(1)
-        c2 = TegConstant(3)
+        x = Var('x', 1)
+        c1 = Const(1)
+        c2 = Const(3)
         f = c1 * x**3 + c2 * x**2 + c2 * x + c1
         # df(x=1)/dx
         deriv_expr = reverse_deriv(f, self.single_out_deriv)
@@ -170,9 +168,9 @@ class TestReverseDerivatives(unittest.TestCase):
         self.assertEqual(evaluate(deriv_expr, ignore_cache=True), 0)
 
     def test_deriv_branch(self):
-        x = TegVariable('x')
-        theta = TegVariable('theta', 1)
-        f = TegConditional(x, theta, theta * theta)
+        x = Var('x')
+        theta = Var('theta', 1)
+        f = Cond(x, theta, theta * theta)
 
         deriv_expr = reverse_deriv(f, self.single_out_deriv)
         x.bind_variable(x, 1)
@@ -183,12 +181,12 @@ class TestReverseDerivatives(unittest.TestCase):
         self.assertAlmostEqual(evaluate(deriv_expr, ignore_cache=True), 1)
 
     def test_deriv_integral(self):
-        a = TegConstant(name='a', value=0)
-        b = TegConstant(name='b', value=1)
+        a = Const(name='a', value=0)
+        b = Const(name='b', value=1)
 
-        x = TegVariable('x')
-        theta = TegVariable('theta', 5)
-        f = TegIntegral(a, b, x * theta, x)
+        x = Var('x')
+        theta = Var('theta', 5)
+        f = Teg(a, b, x * theta, x)
 
         deriv_expr = reverse_deriv(f, self.single_out_deriv)
 
@@ -196,21 +194,21 @@ class TestReverseDerivatives(unittest.TestCase):
         self.assertAlmostEqual(evaluate(deriv_expr), 0.5)
 
     def test_deriv_integral_branch_poly(self):
-        a = TegConstant(name='a', value=0)
-        b = TegConstant(name='b', value=1)
+        a = Const(name='a', value=0)
+        b = Const(name='b', value=1)
 
-        theta1 = TegVariable('theta1', -1)
-        theta2 = TegVariable('theta2', 1)
+        theta1 = Var('theta1', -1)
+        theta2 = Var('theta2', 1)
         # g = \int_a^b if(x<0.5) x*theta1 else 1 dx
         # h = \int_a^b x*theta2 + x^2theta1^2 dx
-        x = TegVariable('x')
-        body = TegConditional(x - TegConstant(0.5), x * theta1, b)
-        g = TegIntegral(a, b, body, x)
-        h = TegIntegral(a, b, x * theta2 + x**2 * theta1**2, x)
+        x = Var('x')
+        body = Cond(x - Const(0.5), x * theta1, b)
+        g = Teg(a, b, body, x)
+        h = Teg(a, b, x * theta2 + x**2 * theta1**2, x)
 
-        y = TegVariable('y', 0)
+        y = Var('y', 0)
         # if(y < 1) g else h
-        f = TegConditional(y - TegConstant(1), g, h)
+        f = Cond(y - Const(1), g, h)
 
         # [df/d(theta1), df/d(theta2)]
         deriv_expr = reverse_deriv(f, self.single_out_deriv)
@@ -225,17 +223,17 @@ class TestReverseDerivatives(unittest.TestCase):
         self.assertAlmostEqual(df_dtheta2, 1/2, places=3)
 
     def test_deriv_tuple(self):
-        x = TegVariable('x', -1)
-        y = TegVariable('y', 2)
-        t = TegVariable('t')
-        a = TegConstant(0)
-        b = TegConstant(1)
+        x = Var('x', -1)
+        y = Var('y', 2)
+        t = Var('t')
+        a = Const(0)
+        b = Const(1)
 
-        cond = TegConditional(x - a, x, y)
-        integral = TegIntegral(a, b, t * x, t)
+        cond = Cond(x - a, x, y)
+        integral = Teg(a, b, t * x, t)
 
-        f = TegTuple(x, x + x, x * x, x + y, x * y, cond, integral)
-        out_derivs = TegTuple(*[TegConstant(1) for i in range(len(f.children))])
+        f = Tup(x, x + x, x * x, x + y, x * y, cond, integral)
+        out_derivs = Tup(*[Const(1) for i in range(len(f.children))])
         deriv_expr = reverse_deriv(f, out_derivs)
 
         expected = [1, 2, -2, [1, 1], [2, -1], [1, 0], 0.5]
@@ -247,22 +245,22 @@ class TestReverseDerivatives(unittest.TestCase):
                 self.assertAlmostEqual(res, exp)
 
     def test_deriv_let_in(self):
-        x1 = TegVariable('x1')
-        x2 = TegVariable('x2')
+        x1 = Var('x1')
+        x2 = Var('x2')
 
-        y = TegVariable('y', 1)
-        z = TegVariable('z', 2)
+        y = Var('y', 1)
+        z = Var('z', 2)
 
         # let x1 = y + z
         #     x2 = y * z in
         # x1 + x2 * y
-        new_vars = TegTuple(x1, x2)
-        new_exprs = TegTuple(y + z, y * z)
+        new_vars = Tup(x1, x2)
+        new_exprs = Tup(y + z, y * z)
 
         expr = x1 + x2 * y
-        letin = TegLetIn(new_vars, new_exprs, expr)
+        letin = LetIn(new_vars, new_exprs, expr)
 
-        out_derivs = TegTuple(TegConstant(1))
+        out_derivs = Tup(Const(1))
         deriv_expr = reverse_deriv(letin, out_derivs)
 
         expected = [5, 2]

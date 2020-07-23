@@ -1,14 +1,17 @@
 """Add operator overload methods to Teg classes. """
+import numpy as np
+
 from integrable_program import (
+    ITeg,
+    Const,
+    Var,
+    Add,
+    Mul,
+    Cond,
     Teg,
-    TegConstant,
-    TegVariable,
-    TegAdd,
-    TegMul,
-    TegConditional,
-    TegIntegral,
-    TegTuple,
-    TegLetIn,
+    Tup,
+    LetIn,
+    try_making_teg_const,
 )
 
 
@@ -20,37 +23,38 @@ def overloads(to_cls):
     return overloaded
 
 
-@overloads(Teg)
+@overloads(ITeg)
 class TegOverloads:
 
     def __add__(self, other):
-        return TegAdd([self, other])
+        return Add([self, try_making_teg_const(other)])
 
     def __sub__(self, other):
-        return self + (-other)
+        return self + (-try_making_teg_const(other))
 
     def __mul__(self, other):
-        return TegMul([self, other])
+        return Mul([self, try_making_teg_const(other)])
 
     def __radd__(self, other):
-        return other + self
+        return try_making_teg_const(other) + self
 
     def __rmul__(self, other):
-        return other * self
+        return try_making_teg_const(other) * self
 
     def __pow__(self, exp):
-        if exp == 0:
-            return TegConstant(1)
+        exp = try_making_teg_const(exp)
+        if exp.value == 0:
+            return Const(1)
         # TODO: this is naive linear, could be log. Also, should support more.
-        assert isinstance(exp, int) and exp > 0, "We only support positive integer powers."
-        return self * self**(exp - 1)
+        assert isinstance(exp.value, int) and exp.value > 0, "We only support positive integer powers."
+        return self * self**(exp.value - 1)
 
     def __str__(self):
         children = [str(child) for child in self.children]
         return f'{self.name}({", ".join(children)})'
 
     def __neg__(self):
-        return TegConstant(-1) * self
+        return Const(-1) * self
 
     def __eq__(self, other):
         return (type(self) == type(other)
@@ -58,7 +62,7 @@ class TegOverloads:
                 and sum(e1 == e2 for e1, e2 in zip(self.children, other.children)) == len(self.children))
 
 
-@overloads(TegVariable)
+@overloads(Var)
 class TegVariableOverloads:
 
     def __lt__(self, other):
@@ -77,7 +81,7 @@ class TegVariableOverloads:
         return f'TegVariable(name={self.name}, value={self.value})'
 
 
-@overloads(TegConstant)
+@overloads(Const)
 class TegConstantOverloads:
 
     def __str__(self):
@@ -90,21 +94,21 @@ class TegConstantOverloads:
         return self.value == other.value
 
 
-@overloads(TegAdd)
+@overloads(Add)
 class TegAddOverloads:
 
     def __str__(self):
         return f'({self.children[0]} + {self.children[1]})'
 
 
-@overloads(TegMul)
+@overloads(Mul)
 class TegMulOverloads:
 
     def __str__(self):
         return f'({self.children[0]} * {self.children[1]})'
 
 
-@overloads(TegIntegral)
+@overloads(Teg)
 class TegIntegralOverloads:
 
     def __str__(self):
@@ -117,7 +121,7 @@ class TegIntegralOverloads:
                 and self.dvar == other.dvar)
 
 
-@overloads(TegConditional)
+@overloads(Cond)
 class TegConditionalOverloads:
 
     def __str__(self):
@@ -130,7 +134,7 @@ class TegConditionalOverloads:
                 and self.allow_eq == other.allow_eq)
 
 
-@overloads(TegTuple)
+@overloads(Tup)
 class TegTupleOverloads:
 
     def __str__(self):
@@ -143,7 +147,7 @@ class TegTupleOverloads:
         return len(self.children)
 
 
-@overloads(TegLetIn)
+@overloads(LetIn)
 class TegLetInOverloads:
 
     def __str__(self):
