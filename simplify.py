@@ -4,10 +4,16 @@ from integrable_program import (
     Var,
     Add,
     Mul,
-    Cond,
+    Invert,
+    IfElse,
     Teg,
     Tup,
     LetIn,
+    Or,
+    And,
+    Bool,
+    true,
+    false,
 )
 from derivs import FwdDeriv, RevDeriv
 import operator_overloads  # noqa: F401
@@ -39,24 +45,22 @@ def simplify(expr: ITeg) -> ITeg:
             return simple1
         return simple1 * simple2
 
-    elif isinstance(expr, Cond):
-        lt_expr, if_body, else_body = simplify(expr.lt_expr), simplify(expr.if_body), simplify(expr.else_body)
-        if (isinstance(if_body, Const) and isinstance(else_body, Const)
-                and if_body.value == 0 and else_body.value == 0):
+    elif isinstance(expr, Invert):
+        return Invert(simplify(expr.child))
+
+    elif isinstance(expr, IfElse):
+        cond, if_body, else_body = simplify(expr.cond), simplify(expr.if_body), simplify(expr.else_body)
+        # if (isinstance(if_body, Const) and isinstance(else_body, Const)
+                # and if_body.value == 0 and else_body.value == 0):
+            # return if_body
+
+        if cond == true:
             return if_body
 
-        # When lt_expr has a value (it's a bound variable or constant)
-        # return the appropriate branch
-        try:
-            if lt_expr.value is not None:
-                if lt_expr.value < 0 or (expr.allow_eq and lt_expr.value == 0):
-                    return if_body
-                else:
-                    return else_body
-        except AttributeError:
-            pass
+        if cond == false:
+            return else_body
 
-        return Cond(lt_expr, if_body, else_body, allow_eq=expr.allow_eq)
+        return IfElse(cond, if_body, else_body)
 
     elif isinstance(expr, Teg):
         body = simplify(expr.body)
@@ -72,6 +76,29 @@ def simplify(expr: ITeg) -> ITeg:
 
     elif isinstance(expr, (FwdDeriv, RevDeriv)):
         return simplify(expr.deriv_expr)
+
+    elif isinstance(expr, Bool):
+        return Bool(simplify(expr.left_expr), simplify(expr.right_expr))
+
+    elif isinstance(expr, And):
+        left_expr, right_expr = simplify(expr.left_expr), simplify(expr.right_expr)
+        if left_expr == true:
+            return right_expr
+        if right_expr == true:
+            return left_expr
+        if left_expr == false or right_expr == false:
+            return false
+        return And(left_expr, right_expr)
+
+    elif isinstance(expr, Or):
+        left_expr, right_expr = simplify(expr.left_expr), simplify(expr.right_expr)
+        if left_expr == false:
+            return right_expr
+        if right_expr == false:
+            return left_expr
+        if left_expr == true or right_expr == true:
+            return true
+        return Or(left_expr, right_expr)
 
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported fwd_derivative.')

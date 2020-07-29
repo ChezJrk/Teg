@@ -4,10 +4,14 @@ from integrable_program import (
     Var,
     Add,
     Mul,
-    Cond,
+    IfElse,
     Teg,
     Tup,
     LetIn,
+    Bool,
+    And,
+    Or,
+    Invert,
 )
 import operator_overloads  # noqa: F401
 
@@ -34,11 +38,14 @@ def substitute(expr: ITeg, this_expr: ITeg, that_expr: ITeg) -> ITeg:
         simple1, simple2 = substitute(expr1, this_expr, that_expr), substitute(expr2, this_expr, that_expr)
         return simple1 * simple2
 
-    elif isinstance(expr, Cond):
-        lt_expr = substitute(expr.lt_expr, this_expr, that_expr)
+    elif isinstance(expr, Invert):
+        return Invert(substitute(expr.child, this_expr, that_expr))
+
+    elif isinstance(expr, IfElse):
+        cond = substitute(expr.cond, this_expr, that_expr)
         if_body = substitute(expr.if_body, this_expr, that_expr)
         else_body = substitute(expr.else_body, this_expr, that_expr)
-        return Cond(lt_expr, if_body, else_body, allow_eq=expr.allow_eq)
+        return IfElse(cond, if_body, else_body)
 
     elif isinstance(expr, Teg):
         # Ignore shadowed variables
@@ -55,5 +62,20 @@ def substitute(expr: ITeg, this_expr: ITeg, that_expr: ITeg) -> ITeg:
         let_body = Tup(*(substitute(e, this_expr, that_expr) for e in expr.new_exprs))
         return LetIn(expr.new_vars, let_body, let_expr)
 
+    elif isinstance(expr, Bool):
+        left_expr = substitute(expr.left_expr, this_expr, that_expr)
+        right_expr = substitute(expr.right_expr, this_expr, that_expr)
+        return Bool(left_expr, right_expr)
+
+    elif isinstance(expr, And):
+        left_expr = substitute(expr.left_expr, this_expr, that_expr)
+        right_expr = substitute(expr.right_expr, this_expr, that_expr)
+        return And(left_expr, right_expr)
+
+    elif isinstance(expr, Or):
+        left_expr = substitute(expr.left_expr, this_expr, that_expr)
+        right_expr = substitute(expr.right_expr, this_expr, that_expr)
+        return Or(left_expr, right_expr)
+
     else:
-        raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported fwd_derivative.')
+        raise ValueError(f'The type of the expr "{type(expr)}" is not supported by substitute.')

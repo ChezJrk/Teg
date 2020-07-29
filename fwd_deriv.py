@@ -1,7 +1,5 @@
 from typing import Dict, Set, List, Tuple, Iterable
 from functools import reduce
-from copy import deepcopy
-from collections import defaultdict
 
 from integrable_program import (
     ITeg,
@@ -9,11 +7,18 @@ from integrable_program import (
     Var,
     Add,
     Mul,
-    Cond,
+    Invert,
+    IfElse,
     Teg,
     Tup,
     LetIn,
     Ctx,
+    ITegBool,
+    Bool,
+    And,
+    Or,
+    true,
+    false,
 )
 from substitute import substitute
 
@@ -52,8 +57,14 @@ def solve_for_dvar(expr: ITeg, var: ITeg):
 
     def flatten_to_nary_add(expr: ITeg) -> List[ITeg]:
 
-        if isinstance(expr, (Var, Mul)):
+        if isinstance(expr, Var):
             return [expr]
+
+        elif isinstance(expr, Mul):
+            if expr.children[0] == Const(-1):
+                return [-e for e in flatten_to_nary_add(expr.children[1])]
+            else:
+                return [expr]
 
         elif isinstance(expr, Add):
             return [e for ex in expr.children for e in flatten_to_nary_add(ex)]
@@ -70,7 +81,7 @@ def solve_for_dvar(expr: ITeg, var: ITeg):
     for e in flatten_to_nary_add(expr):
         vs = extract_variables_from_affine(e).values()
         cs = extract_constants_from_affine(e)
-        assert len(vs) <= 1, "Only a single variable can be in an affine expression"
+        assert len(vs) <= 1, "Only a single variable can be in an affine product"
         if len(vs) == 1:
             v = list(vs)[0]
             if v.name in d:
@@ -84,14 +95,10 @@ def solve_for_dvar(expr: ITeg, var: ITeg):
     cks, vs = d.pop((var.name, var.uid))
     ck_val = prod(cks)
 
-    inverse = Const(0)
+    # Aggregate all of the constants and variables
+    inverse = -const / ck_val
     for cs, v in d.values():
         inverse += Const(-prod(cs) / ck_val) * v
-
-    inverse += -const / ck_val
-    # if len(consts) > 0:
-    # inverse += Const(const.value / ck_val)
-    # import ipdb; ipdb.set_trace()
     return inverse
 
 
@@ -104,18 +111,8 @@ def extract_moving_discontinuities(expr: ITeg,
     Concretely, this means finding each branching statement including
     the integration variable and a variable defined in an outside context.
     """
-
-    if isinstance(expr, Cond):
-        var_name_var_in_cond = extract_variables_from_affine(expr.lt_expr)
-        moving_var_name_uids = var_name_var_in_cond.keys() - not_ctx - {(var.name, var.uid)}
-
-        # Check that the variable var is in lt_expr
-        # and another variable not in not_ctx is in the lt_expr
-        if ((var.name, var.uid) in var_name_var_in_cond
-                and len(moving_var_name_uids) > 0
-                and len(banned_variables & moving_var_name_uids) == 0):
-            # if dvar=x and the condition is x<t then returns (expr, t)
-            yield from ((expr,  var_name_var_in_cond[moving_var_name]) for moving_var_name in moving_var_name_uids)
+    if isinstance(expr, IfElse):
+        yield from moving_discontinuities_in_boolean(expr.cond, var, not_ctx, banned_variables)
 
     elif isinstance(expr, Teg):
         banned_variables.add((expr.dvar.name, expr.dvar.uid))
@@ -124,46 +121,63 @@ def extract_moving_discontinuities(expr: ITeg,
                 for moving_cond in extract_moving_discontinuities(child, var, not_ctx, banned_variables))
 
 
+def moving_discontinuities_in_boolean(expr: ITegBool,
+                                      var: Var,
+                                      not_ctx: Set[Tuple[str, int]],
+                                      banned_variables: Set[Tuple[(str, int)]]) -> bool:
+    if isinstance(expr, Bool):
+        var_name_var_in_cond = extract_variables_from_affine(expr.left_expr - expr.right_expr)
+        moving_var_name_uids = var_name_var_in_cond.keys() - not_ctx - {(var.name, var.uid)}
+
+        # Check that the variable var is in lt_expr
+        # and another variable not in not_ctx is in the lt_expr
+        if ((var.name, var.uid) in var_name_var_in_cond
+                and len(moving_var_name_uids) > 0
+                and len(banned_variables & moving_var_name_uids) == 0):
+            # if dvar=x and the condition is x<t then returns (expr, t)
+            yield expr
+
+    elif isinstance(expr, (And, Or)):
+        yield from moving_discontinuities_in_boolean(expr.left_expr, var, not_ctx, banned_variables)
+        yield from moving_discontinuities_in_boolean(expr.right_expr, var, not_ctx, banned_variables)
+
+    else:
+        raise ValueError('Illegal expression in boolean.')
+
+
 def delta_contribution(expr: Teg,
                        not_ctx: Set[Tuple[str, int]]
                        ) -> Dict[Tuple[str, int], Tuple[Tuple[str, int], ITeg]]:
     """Given an expression for the integral, generate an expression for the derivative of jump discontinuities. """
-    moving_discontinuities = extract_moving_discontinuities(expr.body, expr.dvar, not_ctx.copy(), set())
-
-    # Avoid overcounting the same discontinuities e.g. [x < 1] + [x < 1] = 2 not 4
-    unique_pairs, merged_moving_discontinuities = [], []
-    for discont_expr, moving_var in moving_discontinuities:
-        try:
-            ind = unique_pairs.index((discont_expr.lt_expr, moving_var))
-            merged_moving_discontinuities[ind][0].append(discont_expr)
-        except ValueError:
-            unique_pairs.append((discont_expr.lt_expr, moving_var))
-            merged_moving_discontinuities.append(([discont_expr], moving_var))
 
     # Descends into all subexpressions extracting moving discontinuities
-    moving_var_data = {}
-    for discont_exprs, moving_var in merged_moving_discontinuities:
+    moving_var_data = []
+    considered_bools = []
+    for discont_bool in extract_moving_discontinuities(expr.body, expr.dvar, not_ctx.copy(), set()):
+        try:
+            considered_bools.index(discont_bool)
+        except ValueError:
+            considered_bools.append(discont_bool)
 
-        # Evaluate the discontinuity at x = t+
-        expr_body_right = expr.body
-        for discont_expr in discont_exprs:
-            expr_body_right = substitute(expr_body_right, discont_expr, discont_expr.else_body)
-        expr_for_dvar = solve_for_dvar(discont_expr.lt_expr, expr.dvar)
-        expr_body_right = substitute(expr_body_right, expr.dvar, expr_for_dvar)
+            # Evaluate the discontinuity at x = t+
+            expr_body_right = expr.body
+            expr_body_right = substitute(expr_body_right, discont_bool, false)
 
-        # Evaluate the discontinuity at x = t-
-        expr_body_left = expr.body
-        for discont_expr in discont_exprs:
-            expr_body_left = substitute(expr_body_left, discont_expr, discont_expr.if_body)
-        expr_body_left = substitute(expr_body_left, expr.dvar, expr_for_dvar)
+            expr_for_dvar = solve_for_dvar(discont_bool.left_expr - discont_bool.right_expr, expr.dvar)
+            expr_body_right = substitute(expr_body_right, expr.dvar, expr_for_dvar)
 
-        # if lower < dvar < upper, include the contribution from the discontinuity (x=t+ - x=t-)
-        moving_var_delta = Cond(expr_for_dvar - expr.upper,
-                                          Cond(expr.lower - expr_for_dvar,
-                                                         expr_body_right - expr_body_left,
-                                                         Const(0)),
-                                          Const(0))
-        moving_var_data[(moving_var.name, moving_var.uid)] = (f'd{moving_var.name}', moving_var_delta)
+            # Evaluate the discontinuity at x = t-
+            expr_body_left = expr.body
+            expr_body_left = substitute(expr_body_left, discont_bool, true)
+            expr_body_left = substitute(expr_body_left, expr.dvar, expr_for_dvar)
+
+            # if lower < dvar < upper, include the contribution from the discontinuity (x=t+ - x=t-)
+            moving_var_delta = IfElse(expr_for_dvar < expr.upper,
+                                      IfElse(expr.lower < expr_for_dvar,
+                                             expr_body_right - expr_body_left,
+                                             Const(0)),
+                                      Const(0))
+            moving_var_data.append((moving_var_delta, expr_for_dvar))
 
     return moving_var_data
 
@@ -219,12 +233,16 @@ def fwd_deriv_transform(expr: ITeg,
         ctx = {**ctx1, **ctx2}
         not_ctx = not_ctx1 | not_ctx2
 
-    elif isinstance(expr, Cond):
+    elif isinstance(expr, Invert):
+        deriv_expr, ctx, not_ctx = fwd_deriv_transform(expr.child, ctx, not_ctx)
+        expr = -expr * expr * deriv_expr
+
+    elif isinstance(expr, IfElse):
         if_body, ctx1, not_ctx1 = fwd_deriv_transform(expr.if_body, ctx, not_ctx)
         else_body, ctx2, not_ctx2 = fwd_deriv_transform(expr.else_body, ctx, not_ctx)
         ctx = {**ctx1, **ctx2}
         not_ctx = not_ctx1 | not_ctx2
-        expr = Cond(expr.lt_expr, if_body, else_body)
+        expr = IfElse(expr.cond, if_body, else_body)
 
     elif isinstance(expr, Teg):
         assert expr.dvar not in ctx, f'Names of infinitesimal "{expr.dvar}" are distinct from context "{ctx}"'
@@ -233,16 +251,14 @@ def fwd_deriv_transform(expr: ITeg,
         # Include derivative contribution from moving boundaries of integration
         boundary_val, new_ctx, new_not_ctx = boundary_contribution(expr, ctx, not_ctx)
 
-        # Include derivative contribution from delta functions produced as a result
-        # of taking derivatives of discontinuities
+        not_ctx.add((expr.dvar.name, expr.dvar.uid))
+
         moving_var_data = delta_contribution(expr, not_ctx)
         delta_val = Const(0)
-        for name_uid, (new_name, val) in moving_var_data.items():
-            if name_uid not in ctx:
-                ctx[name_uid] = Var(new_name)
-            delta_val += ctx[name_uid] * val
+        for (moving_var_delta, expr_for_dvar) in moving_var_data:
+            deriv_expr, ctx, not_ctx = fwd_deriv_transform(expr_for_dvar, ctx, not_ctx)
+            delta_val += deriv_expr * moving_var_delta
 
-        not_ctx.add((expr.dvar.name, expr.dvar.uid))
         body, ctx, not_ctx = fwd_deriv_transform(expr.body, ctx, not_ctx)
         ctx.update(new_ctx)
         not_ctx |= new_not_ctx

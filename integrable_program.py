@@ -17,10 +17,15 @@ class ITeg:
         self.value = None
 
     def bind_variable(self, var: 'Var', value: Optional[float] = None) -> None:
-        [child.bind_variable(var, value) for child in self.children]
+        for child in self.children:
+            child.bind_variable(var, value)
 
 
-class Var(ITeg):
+class PiecewiseAffine(ITeg):
+    pass
+
+
+class Var(PiecewiseAffine):
     global_uid = 0
 
     def __init__(self, name: str, value: Optional[float] = None, uid: Optional[int] = None):
@@ -47,14 +52,21 @@ class Const(Var):
         pass
 
 
-class Add(ITeg):
+class Add(PiecewiseAffine):
     name = 'add'
     operation = operator.add
 
 
-class Mul(ITeg):
+class Mul(PiecewiseAffine):
     name = 'mul'
     operation = operator.mul
+
+
+class Invert(ITeg):
+
+    def __init__(self, child):
+        super(Invert, self).__init__(children=[child])
+        self.child = child
 
 
 class Teg(ITeg):
@@ -65,13 +77,17 @@ class Teg(ITeg):
         self.dvar = dvar
 
 
-class Cond(ITeg):
+class IfElse(ITeg):
 
-    def __init__(self, lt_expr: ITeg, if_body: ITeg, else_body: ITeg, allow_eq: bool = False):
-        super(Cond, self).__init__(children=[try_making_teg_const(e) for e in (lt_expr, if_body, else_body)])
-        assert isinstance(allow_eq, bool)
-        self.lt_expr, self.if_body, self.else_body = self.children
-        self.allow_eq = allow_eq
+    def __init__(self, cond: 'ITegBool', if_body: ITeg, else_body: ITeg):
+        super(IfElse, self).__init__(children=[try_making_teg_const(e) for e in (if_body, else_body)])
+        self.cond = cond
+        self.if_body, self.else_body = self.children
+
+    def bind_variable(self, var: 'Var', value: Optional[float] = None) -> None:
+        self.cond.bind_variable(var, value)
+        for child in self.children:
+            child.bind_variable(var, value)
 
 
 class Tup(ITeg):
@@ -118,3 +134,42 @@ class Ctx(dict):
             raise ValueError(f'No value for the variable "{key}" has been set.')
         else:
             return self.parent[key]
+
+
+class ITegBool:
+
+    def __init__(self):
+        self.value = None
+
+    def bind_variable(self, var: 'Var', value: Optional[float] = None) -> None:
+        self.left_expr.bind_variable(var, value)
+        self.right_expr.bind_variable(var, value)
+
+
+class Bool(ITegBool):
+
+    def __init__(self, left_expr: PiecewiseAffine, right_expr: PiecewiseAffine, allow_eq: bool = False):
+        super(Bool, self).__init__()
+        self.left_expr = try_making_teg_const(left_expr)
+        self.right_expr = try_making_teg_const(right_expr)
+        self.allow_eq = allow_eq
+
+
+class BinBool(ITegBool):
+
+    def __init__(self, left_expr: ITegBool, right_expr: ITegBool):
+        super(BinBool, self).__init__()
+        self.left_expr = left_expr
+        self.right_expr = right_expr
+
+
+class And(BinBool):
+    pass
+
+
+class Or(BinBool):
+    pass
+
+
+true = Bool(Const(0), Const(1))
+false = Bool(Const(1), Const(0))

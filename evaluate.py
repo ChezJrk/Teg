@@ -6,10 +6,14 @@ from integrable_program import (
     Var,
     Add,
     Mul,
-    Cond,
+    IfElse,
     Teg,
     Tup,
     LetIn,
+    Bool,
+    And,
+    Or,
+    Invert,
 )
 from derivs import FwdDeriv, RevDeriv
 
@@ -27,9 +31,12 @@ def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
     elif isinstance(expr, (Add, Mul)):
         expr.value = expr.operation(*[evaluate(e, num_samples, ignore_cache) for e in expr.children])
 
-    elif isinstance(expr, Cond):
-        lt_val = evaluate(expr.lt_expr, num_samples, ignore_cache)
-        body = expr.if_body if lt_val < 0 or (expr.allow_eq and lt_val == 0) else expr.else_body
+    elif isinstance(expr, Invert):
+        expr.value = 1 / evaluate(expr.child, num_samples, ignore_cache)
+
+    elif isinstance(expr, IfElse):
+        cond = evaluate(expr.cond, num_samples, ignore_cache)
+        body = expr.if_body if cond else expr.else_body
         expr.value = evaluate(body, num_samples, ignore_cache)
 
     elif isinstance(expr, Teg):
@@ -68,6 +75,21 @@ def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
 
     elif isinstance(expr, (FwdDeriv, RevDeriv)):
         expr.value = evaluate(expr.deriv_expr, num_samples, ignore_cache)
+
+    elif isinstance(expr, Bool):
+        left_val = evaluate(expr.left_expr, num_samples, ignore_cache)
+        right_val = evaluate(expr.right_expr, num_samples, ignore_cache)
+        expr.value = (left_val < right_val) or (expr.allow_eq and (expr.left_val == expr.right_val))
+
+    elif isinstance(expr, And):
+        left_val = evaluate(expr.left_expr, num_samples, ignore_cache)
+        right_val = evaluate(expr.right_expr, num_samples, ignore_cache)
+        expr.value = left_val and right_val
+
+    elif isinstance(expr, Or):
+        left_val = evaluate(expr.left_expr, num_samples, ignore_cache)
+        right_val = evaluate(expr.right_expr, num_samples, ignore_cache)
+        expr.value = left_val or right_val
 
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported derivative.')

@@ -8,7 +8,7 @@ from integrable_program import (
     Var,
     Add,
     Mul,
-    Cond,
+    IfElse,
     Teg,
     Tup,
     LetIn,
@@ -41,6 +41,24 @@ class TestArithmetic(TestCase):
         x = Var('x', 2)
         cube = x * x * x
         self.assertAlmostEqual(evaluate(cube), 8, places=3)
+
+    def test_divide(self):
+        x = Var('x', 2)
+        y = Var('y', 4)
+        fraction = x / y
+        self.assertAlmostEqual(evaluate(fraction), 0.5)
+
+        rev_res = RevDeriv(fraction, Tup(Const(1)))
+        check_nested_lists(self, evaluate(rev_res), [0.25, -0.125])
+
+        fwd_res = FwdDeriv(fraction, [(x, 1), (y, 0)])
+        self.assertEqual(evaluate(fwd_res, ignore_cache=True), 0.25)
+
+        fwd_res = FwdDeriv(fraction, [(x, 0), (y, 1)])
+        self.assertEqual(evaluate(fwd_res, ignore_cache=True), -0.125)
+
+        fraction = 1 / y
+        self.assertAlmostEqual(evaluate(fraction), 1 / 4)
 
     def test_polynomial(self):
         x = Var('x', 2)
@@ -76,6 +94,12 @@ class TestIntegrations(TestCase):
         # int_{a}^{b} x^2 dx
         integral = Teg(a, b, x * x, x)
         self.assertAlmostEqual(evaluate(integral), 2 / 3, places=1)
+
+    def test_integrate_division(self):
+        x = Var('x')
+        # int_{a}^{b} x^2 dx
+        integral = Teg(1, 2, 1 / x**2, x)
+        self.assertAlmostEqual(evaluate(integral), 0.5, places=3)
 
     def test_integrate_poly(self):
         a, b = -1, 2
@@ -152,7 +176,7 @@ class TestConditionals(TestCase):
         b = Var('b', 1)
 
         x = Var('x')
-        cond = Cond(x, a, b)
+        cond = IfElse(x < 0, a, b)
 
         # if(x < c) 0 else 1 at x=-1
         cond.bind_variable(x, -1)
@@ -169,7 +193,7 @@ class TestConditionals(TestCase):
         x = Var('x')
         d = Var('d', 0)
         # if(x < c) 0 else 1
-        body = Cond(x, d, b)
+        body = IfElse(x < 0, d, b)
         integral = Teg(a, b, body, x)
 
         # int_{a=-1}^{b=1} (if(x < c) 0 else 1) dx
@@ -182,7 +206,7 @@ class TestConditionals(TestCase):
         x = Var('x', -1)
         t = Var('t')
         # if(x < c) 0 else 1
-        upper = Cond(x, a, b)
+        upper = IfElse(x < 0, a, b)
         integral = Teg(a, upper, t, t)
 
         # int_{a=0}^{if(x < c) 0 else 1} t dt
@@ -201,8 +225,7 @@ class TestTups(TestCase):
 
         x = Var("x", 2)
         v1 = Tup(*[Const(i) for i in range(5, 15)])
-        v2 = Tup(*[Cond(x, Const(1), Const(2))
-                        for i in range(5, 15)])
+        v2 = Tup(*[IfElse(x < 0, Const(1), Const(2)) for i in range(5, 15)])
 
         t_squared = v1 * v2
         self.assertEqual(evaluate(t_squared)[0], 10)
@@ -210,7 +233,7 @@ class TestTups(TestCase):
     def test_tuple_branch(self):
         x = Var("x", 2)
         v = Tup(*[Const(i) for i in range(5, 15)])
-        cond = Cond(x, v, Const(1))
+        cond = IfElse(x < 0, v, Const(1))
         res = Const(1) + cond + v
         self.assertEqual(evaluate(res)[0], 7)
 
@@ -275,7 +298,7 @@ class ActualIntegrationTest(TestCase):
         x = Var('x')
         integral = Teg(Const(0), Const(1), x, x)
 
-        with self.assertRaises(AssertionError):
+        with self.assertRaises((AssertionError, AttributeError)):
             d_integral = FwdDeriv(integral, [(x, 1)])
             evaluate(d_integral)
 
@@ -288,7 +311,7 @@ class VariableBranchConditionsTest(TestCase):
     def test_deriv_heaviside(self):
         x = Var('x')
         t = Var('t', 0.5)
-        heaviside = Cond(x - t, self.zero, self.one)
+        heaviside = IfElse(x < t, self.zero, self.one)
         integral = Teg(self.zero, self.one, heaviside, x)
 
         # d/dt int_{x=0}^1 (x<t) ? 0 : 1
@@ -298,7 +321,7 @@ class VariableBranchConditionsTest(TestCase):
         rev_dintegral = RevDeriv(integral, Tup(Const(1)))
         self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 1)
 
-        neg_heaviside = Cond(x - t, self.one, self.zero)
+        neg_heaviside = IfElse(x < t, self.one, self.zero)
         integral = Teg(self.zero, self.one, neg_heaviside, x)
 
         # d/dt int_{x=0}^{1} (x<t) ? 1 : 0
@@ -311,7 +334,7 @@ class VariableBranchConditionsTest(TestCase):
     def test_deriv_heaviside_discontinuity_out_of_domain(self):
         x = Var('x')
         t = Var('t', 2)
-        heaviside = Cond(x - t, self.zero, self.one)
+        heaviside = IfElse(x < t, self.zero, self.one)
         integral = Teg(self.zero, self.one, heaviside, x)
 
         # d/dt int_{x=0}^1 (x<t) ? 0 : 1
@@ -332,7 +355,7 @@ class VariableBranchConditionsTest(TestCase):
     def test_deriv_scaled_heaviside(self):
         x = Var('x')
         t = Var('t', 0.5)
-        heavyside_t = Cond(x - t, Const(0), Const(1))
+        heavyside_t = IfElse(x < t, Const(0), Const(1))
         body = (x + t) * heavyside_t
         integral = Teg(Const(0), Const(1), body, x)
 
@@ -346,7 +369,7 @@ class VariableBranchConditionsTest(TestCase):
     def test_deriv_add_heaviside(self):
         x = Var('x')
         t = Var('t', 0.5)
-        heavyside_t = Cond(x - t, Const(0), Const(1))
+        heavyside_t = IfElse(x < t, Const(0), Const(1))
         body = x + t + heavyside_t
         integral = Teg(Const(0), Const(1), body, x)
 
@@ -360,8 +383,8 @@ class VariableBranchConditionsTest(TestCase):
     def test_deriv_sum_heavisides(self):
         x = Var('x')
         t = Var('t', 0.5)
-        heavyside_t = Cond(x - t, Const(0), Const(1))
-        flipped_heavyside_t = Cond(x - t, Const(1), Const(0))
+        heavyside_t = IfElse(x < t, Const(0), Const(1))
+        flipped_heavyside_t = IfElse(x < t, Const(1), Const(0))
         body = flipped_heavyside_t + Const(2) * heavyside_t
         integral = Teg(Const(0), Const(1), body, x)
 
@@ -373,7 +396,7 @@ class VariableBranchConditionsTest(TestCase):
         self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 1)
 
         t1 = Var('t1', 0.3)
-        heavyside_t1 = Cond(x - t1, Const(0), Const(1))
+        heavyside_t1 = IfElse(x < t1, Const(0), Const(1))
         body = heavyside_t + heavyside_t1
         integral = Teg(Const(0), Const(1), body, x)
 
@@ -397,8 +420,8 @@ class VariableBranchConditionsTest(TestCase):
     def test_deriv_product_heavisides(self):
         x = Var('x')
         t = Var('t', 0.5)
-        heavyside_t = Cond(x - t, Const(0), Const(1))
-        flipped_heavyside_t = Cond(x - t, Const(1), Const(0))
+        heavyside_t = IfElse(x < t, Const(0), Const(1))
+        flipped_heavyside_t = IfElse(x < t, Const(1), Const(0))
         body = heavyside_t * heavyside_t
         integral = Teg(Const(0), Const(1), body, x)
 
@@ -420,7 +443,7 @@ class VariableBranchConditionsTest(TestCase):
         self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 0)
 
         t1 = Var('t1', 0.3)
-        heavyside_t1 = Cond(x - t1, Const(0), Const(1))
+        heavyside_t1 = IfElse(x < t1, Const(0), Const(1))
         body = heavyside_t * heavyside_t1
         integral = Teg(Const(0), Const(1), body, x)
 
@@ -440,12 +463,12 @@ class VariableBranchConditionsTest(TestCase):
         zero, one = Const(0), Const(1)
         x, y = Var('x'), Var('y')
         t, t1, t2 = Var('t', 0.5), Var('t1', 0.25), Var('t2', 0.75)
-        if_body = Teg(zero, one, Cond(x - t1, x * y, x * y * y), y)
-        else_body = Teg(zero, one, Cond(y - t2, x * x * y, x * x * y * y), y)
-        integral = Teg(zero, one, Cond(x - t, if_body, else_body), x)
+        if_body = Teg(zero, one, IfElse(x < t1, x * y, x * y * y), y)
+        else_body = Teg(zero, one, IfElse(y < t2, x * x * y, x * x * y * y), y)
+        integral = Teg(zero, one, IfElse(x < t, if_body, else_body), x)
 
-        rev_dintegral = RevDeriv(integral, Tup(Const(1)))
         expected = [-0.048, -0.041, -0.054]
+        rev_dintegral = RevDeriv(integral, Tup(Const(1)))
         check_nested_lists(self, evaluate(rev_dintegral, ignore_cache=True), expected, places=2)
 
         fwd_dintegral = FwdDeriv(integral, [(t, 1), (t1, 0), (t2, 0)])
@@ -464,7 +487,7 @@ class VariableBranchConditionsTest(TestCase):
         zero, one = Const(0), Const(1)
         x, theta = Var('x'), Var('theta', 0.5)
 
-        body = Cond(x - theta, one, x * theta)
+        body = IfElse(x < theta, one, x * theta)
         integral = Teg(zero, one, body, x)
         deriv_integral = RevDeriv(integral, Tup(Const(1)))
         self.assertAlmostEqual(evaluate(deriv_integral), -0.375, places=2)
@@ -477,7 +500,7 @@ class VariableBranchConditionsTest(TestCase):
         zero, one = Const(0), Const(1)
         x, y = Var('x'), Var('y')
 
-        body = Cond(x - y, zero, one)
+        body = IfElse(x < y, zero, one)
         integral = Teg(zero, one, body, x)
         body = RevDeriv(integral, Tup(Const(1)))
         double_integral = Teg(zero, one, body, y)
@@ -488,7 +511,7 @@ class VariableBranchConditionsTest(TestCase):
         zero, one = Const(0), Const(1)
         x, y, t = Var('x'), Var('y'), Var('t', 0.5)
 
-        body = Teg(zero, one, Cond(x - t, zero, one), x)
+        body = Teg(zero, one, IfElse(x < t, zero, one), x)
         integral = Teg(zero, one, y * body, y)
 
         deriv_integral = RevDeriv(integral, Tup(Const(1)))
@@ -573,6 +596,76 @@ class MovingBoundaryTest(TestCase):
         self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), 5/12, places=3)
 
 
+class PiecewiseAffineTest(TestCase):
+
+    def test_and_same_location(self):
+        x = Var('x')
+        t = Var('t', 0.5)
+        heavyside_t = IfElse((x < t) & (x < t), Const(0), Const(1))
+
+        integral = Teg(0, 1, heavyside_t, x)
+        # d/dt int_{x=0}^1 ((x<t=0.5) & (x<t=0.5) ? 1 : 0)
+        fwd_dintegral = FwdDeriv(integral, [(t, 1)])
+        self.assertAlmostEqual(evaluate(fwd_dintegral), 1)
+
+        rev_dintegral = RevDeriv(integral, Tup(Const(1)))
+        self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 1)
+
+    def test_or_same_location(self):
+        x = Var('x')
+        t = Var('t', 0.5)
+        heavyside_t = IfElse((x < t) | (x < t), Const(0), Const(1))
+
+        integral = Teg(0, 1, heavyside_t, x)
+        # d/dt int_{x=0}^1 ((x<t=0.5) & (x<t=0.5) ? 1 : 0)
+        fwd_dintegral = FwdDeriv(integral, [(t, 1)])
+        self.assertAlmostEqual(evaluate(fwd_dintegral), 1)
+
+        rev_dintegral = RevDeriv(integral, Tup(Const(1)))
+        self.assertAlmostEqual(evaluate(rev_dintegral, ignore_cache=True), 1)
+
+    def test_and_different_locations(self):
+        x = Var('x')
+        t = Var('t', 0.5)
+        t1 = Var('t1', 0.3)
+        heavyside_t = IfElse((x < t) & (x < t1), Const(0), Const(1))
+
+        integral = Teg(0, 1, heavyside_t, x)
+        # d/dt int_{x=0}^1 ((x<t=0.5) & (x<t=0.5) ? 1 : 0)
+        fwd_dintegral = FwdDeriv(integral, [(t, 0), (t1, 1)])
+        self.assertAlmostEqual(evaluate(fwd_dintegral), 1)
+
+        rev_dintegral = RevDeriv(integral, Tup(Const(1)))
+        check_nested_lists(self, evaluate(rev_dintegral, ignore_cache=True), [0, 1])
+
+    def test_or_different_locations(self):
+        x = Var('x')
+        t = Var('t', 0.5)
+        t1 = Var('t1', 0.3)
+        heavyside_t = IfElse((x < t) | (x < t1), Const(0), Const(1))
+
+        integral = Teg(0, 1, heavyside_t, x)
+        # d/dt int_{x=0}^1 ((x<t=0.5) & (x<t=0.5) ? 1 : 0)
+        fwd_dintegral = FwdDeriv(integral, [(t, 1), (t1, 0)])
+        self.assertAlmostEqual(evaluate(fwd_dintegral), 1)
+
+        rev_dintegral = RevDeriv(integral, Tup(Const(1)))
+        check_nested_lists(self, evaluate(rev_dintegral, ignore_cache=True), [1, 0])
+
+    def test_compound_exprs(self):
+        x = Var('x')
+        t = Var('t', 0.8)
+        t1 = Var('t1', 0.3)
+        t2 = Var('t2', 0.1)
+        if_else = IfElse(((x < t) & (x < t1 + t1)) & (x < t2 + 1), Const(0), Const(1))
+
+        integral = Teg(0, 1, if_else, x)
+
+        # d/dt int_{x=0}^1 ((x<t=0.5) & (x<t=0.5) ? 1 : 0)
+        fwd_dintegral = FwdDeriv(integral, [(t, 0), (t1, 1), (t2, 0)])
+        self.assertAlmostEqual(evaluate(fwd_dintegral), 1)
+
+
 class AffineConditionsTest(TestCase):
 
     def setUp(self):
@@ -580,56 +673,56 @@ class AffineConditionsTest(TestCase):
 
     def test_affine_condition_simple(self):
         x, t = Var('x'), Var('t', 0.25)
-        cond = Cond(x - Const(2) * t, self.zero, self.one)
+        cond = IfElse(x < Const(2) * t, self.zero, self.one)
         integral = Teg(self.zero, self.one, cond, x)
 
         deriv_integral = RevDeriv(integral, Tup(Const(1)))
-        self.assertAlmostEqual(evaluate(deriv_integral), 1)
+        self.assertAlmostEqual(evaluate(deriv_integral), 2)
 
         deriv_integral = FwdDeriv(integral, [(t, 1)])
-        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), 1)
+        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), 2)
 
     def test_affine_condition_with_constants(self):
         x, t = Var('x'), Var('t', 7/4)
-        cond = Cond(x + Const(2) * t - Const(4), self.zero, self.one)
+        cond = IfElse(x + Const(2) * t - Const(4) < 0, self.zero, self.one)
         integral = Teg(self.zero, self.one, cond, x)
 
         deriv_integral = RevDeriv(integral, Tup(Const(1)))
-        self.assertAlmostEqual(evaluate(deriv_integral), 1)
+        self.assertAlmostEqual(evaluate(deriv_integral), -2)
 
         deriv_integral = FwdDeriv(integral, [(t, 1)])
-        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), 1)
+        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), -2)
 
     def test_affine_condition_multivariable(self):
         # \int_{x = [0, 1]} (x - 2 * t1 + 3 * t2 ? 0 : 1)
         x, t1, t2 = Var('x'), Var('t1', 3/4), Var('t2', 1/3)
-        cond = Cond(x - Const(2) * t1 + Const(3) * t2, self.zero, self.one)
+        cond = IfElse(x - Const(2) * t1 + Const(3) * t2 < 0, self.zero, self.one)
         integral = Teg(self.zero, self.one, cond, x)
 
         deriv_integral = RevDeriv(integral, Tup(Const(1)))
-        check_nested_lists(self, evaluate(deriv_integral), [1, 1])
+        check_nested_lists(self, evaluate(deriv_integral), [2, -3])
 
         deriv_integral = FwdDeriv(integral, [(t1, 1), (t2, 0)])
-        self.assertEqual(evaluate(deriv_integral, ignore_cache=True), 1)
+        self.assertEqual(evaluate(deriv_integral, ignore_cache=True), 2)
 
         deriv_integral = FwdDeriv(integral, [(t1, 0), (t2, 1)])
-        self.assertEqual(evaluate(deriv_integral, ignore_cache=True), 1)
+        self.assertEqual(evaluate(deriv_integral, ignore_cache=True), -3)
 
     def test_affine_condition_multivariable_multiintegral(self):
         x, y = Var('x'), Var('y')
         t1, t2 = Var('t1', 1/4), Var('t2', 1)
-        cond = Cond(x - y + Const(2) * t1 + Const(3) * t2 + Const(-3), self.one, self.zero)
+        cond = IfElse(x - y + Const(2) * t1 + Const(3) * t2 + Const(-3) < 0, self.one, self.zero)
         body = Teg(self.zero, self.one, cond, y)
         integral = Teg(self.zero, self.one, body, x)
 
         deriv_integral = RevDeriv(integral, Tup(Const(1)))
-        check_nested_lists(self, evaluate(simplify(deriv_integral)), [-0.5, -0.5])
+        check_nested_lists(self, evaluate(simplify(deriv_integral)), [-1, -1.5])
 
         deriv_integral = FwdDeriv(integral, [(t1, 1), (t2, 0)])
-        self.assertAlmostEqual(evaluate(simplify(deriv_integral)), -0.5)
+        self.assertAlmostEqual(evaluate(simplify(deriv_integral)), -1)
 
         deriv_integral = FwdDeriv(integral, [(t1, 0), (t2, 1)])
-        self.assertAlmostEqual(evaluate(simplify(deriv_integral)), -0.5)
+        self.assertAlmostEqual(evaluate(simplify(deriv_integral)), -1.5)
 
 
 if __name__ == '__main__':

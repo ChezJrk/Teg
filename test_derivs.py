@@ -1,6 +1,6 @@
 import unittest
 
-from integrable_program import Teg, Var, Cond, Const, Tup, LetIn
+from integrable_program import Teg, Var, IfElse, Const, Tup, LetIn
 from fwd_deriv import fwd_deriv
 from reverse_deriv import reverse_deriv
 from evaluate import evaluate
@@ -36,7 +36,7 @@ class TestForwardDerivatives(unittest.TestCase):
     def test_deriv_branch(self):
         x = Var('x')
         theta = Var('theta', 1)
-        f = Cond(x, theta, theta * theta)
+        f = IfElse(x < 0, theta, theta * theta)
 
         deriv_expr = fwd_deriv(f, [(theta, 1)])
         x.bind_variable(x, 1)
@@ -69,13 +69,13 @@ class TestForwardDerivatives(unittest.TestCase):
         # g = \int_a^b if(x<0.5) x*theta1 else 1 dx
         # h = \int_a^b x*theta2 + x^2theta1^2 dx
         x = Var('x')
-        body = Cond(x - Const(0.5), x * theta1, b)
+        body = IfElse(x < Const(0.5), x * theta1, b)
         g = Teg(a, b, body, x)
         h = Teg(a, b, x * theta2 + x**2 * theta1**2, x)
 
         y = Var('y', 0)
         # if(y < 1) g else h
-        f = Cond(y - Const(1), g, h)
+        f = IfElse(y < Const(1), g, h)
 
         # df/d(theta1)
         deriv_expr = fwd_deriv(f, [(theta1, 1), (theta2, 0)])
@@ -99,7 +99,7 @@ class TestForwardDerivatives(unittest.TestCase):
         a = Const(0)
         b = Const(1)
 
-        cond = Cond(x - a, x, y)
+        cond = IfElse(x < a, x, y)
         integral = Teg(a, b, t * x, t)
 
         f = Tup(x, x + x, x * x, x + y, x * y, cond, integral)
@@ -170,7 +170,7 @@ class TestReverseDerivatives(unittest.TestCase):
     def test_deriv_branch(self):
         x = Var('x')
         theta = Var('theta', 1)
-        f = Cond(x, theta, theta * theta)
+        f = IfElse(x < 0, theta, theta * theta)
 
         deriv_expr = reverse_deriv(f, self.single_out_deriv)
         x.bind_variable(x, 1)
@@ -202,13 +202,13 @@ class TestReverseDerivatives(unittest.TestCase):
         # g = \int_a^b if(x<0.5) x*theta1 else 1 dx
         # h = \int_a^b x*theta2 + x^2theta1^2 dx
         x = Var('x')
-        body = Cond(x - Const(0.5), x * theta1, b)
+        body = IfElse(x < Const(0.5), x * theta1, b)
         g = Teg(a, b, body, x)
         h = Teg(a, b, x * theta2 + x**2 * theta1**2, x)
 
         y = Var('y', 0)
         # if(y < 1) g else h
-        f = Cond(y - Const(1), g, h)
+        f = IfElse(y < Const(1), g, h)
 
         # [df/d(theta1), df/d(theta2)]
         deriv_expr = reverse_deriv(f, self.single_out_deriv)
@@ -229,7 +229,7 @@ class TestReverseDerivatives(unittest.TestCase):
         a = Const(0)
         b = Const(1)
 
-        cond = Cond(x - a, x, y)
+        cond = IfElse(x < a, x, y)
         integral = Teg(a, b, t * x, t)
 
         f = Tup(x, x + x, x * x, x + y, x * y, cond, integral)

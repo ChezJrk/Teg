@@ -7,7 +7,8 @@ from integrable_program import (
     Var,
     Add,
     Mul,
-    Cond,
+    Invert,
+    IfElse,
     Teg,
     Tup,
     LetIn,
@@ -38,19 +39,24 @@ def reverse_deriv_transform(expr: ITeg,
         yield from reverse_deriv_transform(left, out_deriv_vals * right, not_ctx)
         yield from reverse_deriv_transform(right, out_deriv_vals * left, not_ctx)
 
-    elif isinstance(expr, Cond):
+    elif isinstance(expr, Invert):
+        child = expr.child
+        yield from reverse_deriv_transform(child, -out_deriv_vals * expr * expr, not_ctx)
+
+    elif isinstance(expr, IfElse):
         derivs_if = reverse_deriv_transform(expr.if_body, Const(1), not_ctx)
         derivs_else = reverse_deriv_transform(expr.else_body, Const(1), not_ctx)
-        yield from ((name_uid, out_deriv_vals * Cond(expr.lt_expr, deriv_if, Const(0)))
+        yield from ((name_uid, out_deriv_vals * IfElse(expr.cond, deriv_if, Const(0)))
                     for name_uid, deriv_if in derivs_if)
-        yield from ((name_uid, out_deriv_vals * Cond(expr.lt_expr, Const(0), deriv_else))
+        yield from ((name_uid, out_deriv_vals * IfElse(expr.cond, Const(0), deriv_else))
                     for name_uid, deriv_else in derivs_else)
 
     elif isinstance(expr, Teg):
         not_ctx.discard((expr.dvar.name, expr.dvar.uid))
         moving_var_data = delta_contribution(expr, not_ctx)
-        yield from (((dname, uid), out_deriv_vals * delta_val)
-                    for (name, uid), (dname, delta_val) in moving_var_data.items())
+        yield from ((name_uid, out_deriv_vals * delta_val * deriv_expr)
+                    for delta_val, expr_for_dvar in moving_var_data
+                    for name_uid, deriv_expr in reverse_deriv_transform(expr_for_dvar, Const(1), not_ctx))
 
         # Apply Leibniz rule directly for moving boundaries
         lower_derivs = reverse_deriv_transform(expr.lower, out_deriv_vals, not_ctx)
