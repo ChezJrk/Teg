@@ -85,7 +85,7 @@ if __name__ == '__main__':
 
     derivs = [FwdDeriv(pixel, [(theta, 1)]) for pixel in pixels]
 
-    res = [evaluate(deriv, num_samples=args.num_samples) for deriv in derivs]
+    res = [evaluate(simplify(deriv), num_samples=args.num_samples) for deriv in derivs]
     pixel_grid = np.array(res).reshape((w, h))
     axes[1].imshow(pixel_grid[::-1, :], vmin=-0.05, vmax=0.05)
     plt.show()

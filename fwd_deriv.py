@@ -21,6 +21,7 @@ from integrable_program import (
     false,
 )
 from substitute import substitute
+from boolean_equal import boolean_equal
 
 
 def extract_constants_from_affine(expr: ITeg) -> List[ITeg]:
@@ -152,10 +153,13 @@ def delta_contribution(expr: Teg,
     # Descends into all subexpressions extracting moving discontinuities
     moving_var_data, considered_bools = [], []
     for discont_bool in extract_moving_discontinuities(expr.body, expr.dvar, not_ctx.copy(), set()):
-        try:
-            considered_bools.index(discont_bool)
-        except ValueError:
-            considered_bools.append(discont_bool)
+
+        already_considered = False
+        for b in considered_bools:
+            if discont_bool == b:
+                already_considered = True
+
+        if not already_considered:
 
             # Evaluate the discontinuity at x = t+
             expr_body_right = expr.body
@@ -173,6 +177,8 @@ def delta_contribution(expr: Teg,
             discontinuity_happens = (expr.lower < expr_for_dvar) & (expr_for_dvar < expr.upper)
             moving_var_delta = IfElse(discontinuity_happens, expr_body_left - expr_body_right, Const(0))
             moving_var_data.append((moving_var_delta, expr_for_dvar))
+
+            considered_bools.append(discont_bool)
 
     return moving_var_data
 

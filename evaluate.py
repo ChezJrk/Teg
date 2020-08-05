@@ -92,6 +92,6 @@ def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
         expr.value = left_val or right_val
 
     else:
-        raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported derivative.')
+        raise ValueError(f'Cannot evaluate expression of type "{type(expr)}".')
 
     return expr.value

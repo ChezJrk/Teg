@@ -22,7 +22,7 @@ def substitute(expr: ITeg, this_expr: ITeg, that_expr: ITeg) -> ITeg:
     if isinstance(expr, Const):
         return expr
 
-    elif expr == this_expr:
+    elif (isinstance(expr, Var) or isinstance(expr, Bool)) and expr == this_expr:
         return that_expr
 
     elif isinstance(expr, Var):

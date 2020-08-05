@@ -18,6 +18,7 @@ from integrable_program import (
     And,
     Or,
 )
+from boolean_equal import boolean_equal
 
 
 def overloads(to_cls):
@@ -71,11 +72,6 @@ class TegOverloads:
     def __neg__(self):
         return Const(-1) * self
 
-    def __eq__(self, other):
-        return (type(self) == type(other)
-                and len(self.children) == len(other.children)
-                and sum(e1 == e2 for e1, e2 in zip(self.children, other.children)) == len(self.children))
-
     def __lt__(self, other):
         return Bool(self, other)
 
@@ -116,9 +112,6 @@ class TegConstantOverloads:
         name = '' if self.name == '' else f', name={self.name}'
         return f'Const(value={self.value}{name})'
 
-    def __eq__(self, other):
-        return self.value == other.value
-
 
 @overloads(Add)
 class TegAddOverloads:
@@ -156,12 +149,6 @@ class TegIntegralOverloads:
     def __str__(self):
         return f'(int_{{{self.dvar.name}=[{self.lower}, {self.upper}]}} {self.body})'
 
-    def __eq__(self, other):
-        return (type(self) == type(other)
-                and len(self.children) == len(other.children)
-                and sum(e1 == e2 for e1, e2 in zip(self.children, other.children)) == len(self.children)
-                and self.dvar == other.dvar)
-
     def __repr__(self):
         return f'Teg({repr(self.lower)}, {repr(self.upper)}, {repr(self.body)}, {repr(self.dvar)})'
 
@@ -171,12 +158,6 @@ class TegConditionalOverloads:
 
     def __str__(self):
         return f'(({self.cond}) ? {(self.if_body)} : {(self.else_body)})'
-
-    def __eq__(self, other):
-        return (type(self) == type(other)
-                and len(self.children) == len(other.children)
-                and sum(e1 == e2 for e1, e2 in zip(self.children, other.children)) == len(self.children)
-                and self.cond == other.cond)
 
     def __repr__(self):
         return f'IfElse({repr(self.cond)}, {repr(self.if_body)}, {repr(self.else_body)})'
@@ -213,12 +194,6 @@ class TegLetInOverloads:
     def __repr__(self):
         return f'LetIn({repr(self.new_vars)}, {repr(self.new_exprs)}, {repr(self.expr)})'
 
-    def __eq__(self, other):
-        return (type(self) == type(other)
-                and len(self.children) == len(other.children)
-                and sum(e1 == e2 for e1, e2 in zip(self.children, other.children)) == len(self.children)
-                and self.new_vars == other.new_vars)
-
 
 @overloads(ITegBool)
 class ITegBoolOverloads:
@@ -229,9 +204,6 @@ class ITegBoolOverloads:
     def __or__(self, other):
         return Or(self, other)
 
-    def __eq__(self, other):
-        return type(self) == type(other) and self.left_expr == other.left_expr and self.right_expr == other.right_expr
-
 
 @overloads(Bool)
 class BoolOverloads:
@@ -241,6 +213,9 @@ class BoolOverloads:
 
     def __repr__(self):
         return f'Bool({repr(self.left_expr)}, {repr(self.right_expr)})'
+
+    def __eq__(self, other):
+        return type(self) == type(other) and boolean_equal(self, other)
 
 
 @overloads(And)
