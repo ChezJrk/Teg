@@ -4,7 +4,7 @@ import numpy as np
 
 
 def try_making_teg_const(x):
-    if type(x) in (int, float, np.int64, np.float):
+    if type(x) in (int, float, np.int64, np.float, np.float64):
         x = Const(x)
     return x
 

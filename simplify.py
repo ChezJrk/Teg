@@ -50,9 +50,9 @@ def simplify(expr: ITeg) -> ITeg:
 
     elif isinstance(expr, IfElse):
         cond, if_body, else_body = simplify(expr.cond), simplify(expr.if_body), simplify(expr.else_body)
-        # if (isinstance(if_body, Const) and isinstance(else_body, Const)
-                # and if_body.value == 0 and else_body.value == 0):
-            # return if_body
+        if (isinstance(if_body, Const) and isinstance(else_body, Const)
+                and if_body.value == 0 and else_body.value == 0):
+            return if_body
 
         if cond == true:
             return if_body

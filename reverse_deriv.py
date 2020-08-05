@@ -22,12 +22,11 @@ def reverse_deriv_transform(expr: ITeg,
                             not_ctx: Set[Tuple[str, int]]) -> Iterable[Tuple[Tuple[str, int], ITeg]]:
 
     if isinstance(expr, Const):
-        yield from []
+        pass
 
     elif isinstance(expr, Var):
         if (expr.name, expr.uid) not in not_ctx:
             yield ((f'd{expr.name}', expr.uid), out_deriv_vals)
-        yield from []
 
     elif isinstance(expr, Add):
         left, right = expr.children
@@ -61,9 +60,9 @@ def reverse_deriv_transform(expr: ITeg,
         # Apply Leibniz rule directly for moving boundaries
         lower_derivs = reverse_deriv_transform(expr.lower, out_deriv_vals, not_ctx)
         upper_derivs = reverse_deriv_transform(expr.upper, out_deriv_vals, not_ctx)
-        yield from ((name_uid, upper_deriv * substitute(expr.body, expr.dvar, upper_deriv))
+        yield from ((name_uid, upper_deriv * substitute(expr.body, expr.dvar, expr.upper))
                     for name_uid, upper_deriv in upper_derivs)
-        yield from ((name_uid, - lower_deriv * substitute(expr.body, expr.dvar, lower_deriv))
+        yield from ((name_uid, - lower_deriv * substitute(expr.body, expr.dvar, expr.lower))
                     for name_uid, lower_deriv in lower_derivs)
 
         not_ctx.add((expr.dvar.name, expr.dvar.uid))

@@ -124,17 +124,16 @@ def extract_moving_discontinuities(expr: ITeg,
 def moving_discontinuities_in_boolean(expr: ITegBool,
                                       var: Var,
                                       not_ctx: Set[Tuple[str, int]],
-                                      banned_variables: Set[Tuple[(str, int)]]) -> bool:
+                                      banned_variables: Set[Tuple[(str, int)]]) -> Iterable[ITeg]:
     if isinstance(expr, Bool):
         var_name_var_in_cond = extract_variables_from_affine(expr.left_expr - expr.right_expr)
         moving_var_name_uids = var_name_var_in_cond.keys() - not_ctx - {(var.name, var.uid)}
 
-        # Check that the variable var is in lt_expr
-        # and another variable not in not_ctx is in the lt_expr
+        # Check that the variable var is in the condition
+        # and another variable not in not_ctx is in the condition
         if ((var.name, var.uid) in var_name_var_in_cond
                 and len(moving_var_name_uids) > 0
                 and len(banned_variables & moving_var_name_uids) == 0):
-            # if dvar=x and the condition is x<t then returns (expr, t)
             yield expr
 
     elif isinstance(expr, (And, Or)):
@@ -151,8 +150,7 @@ def delta_contribution(expr: Teg,
     """Given an expression for the integral, generate an expression for the derivative of jump discontinuities. """
 
     # Descends into all subexpressions extracting moving discontinuities
-    moving_var_data = []
-    considered_bools = []
+    moving_var_data, considered_bools = [], []
     for discont_bool in extract_moving_discontinuities(expr.body, expr.dvar, not_ctx.copy(), set()):
         try:
             considered_bools.index(discont_bool)
@@ -172,11 +170,8 @@ def delta_contribution(expr: Teg,
             expr_body_left = substitute(expr_body_left, expr.dvar, expr_for_dvar)
 
             # if lower < dvar < upper, include the contribution from the discontinuity (x=t+ - x=t-)
-            moving_var_delta = IfElse(expr_for_dvar < expr.upper,
-                                      IfElse(expr.lower < expr_for_dvar,
-                                             expr_body_right - expr_body_left,
-                                             Const(0)),
-                                      Const(0))
+            discontinuity_happens = (expr.lower < expr_for_dvar) & (expr_for_dvar < expr.upper)
+            moving_var_delta = IfElse(discontinuity_happens, expr_body_left - expr_body_right, Const(0))
             moving_var_data.append((moving_var_delta, expr_for_dvar))
 
     return moving_var_data
@@ -189,8 +184,8 @@ def boundary_contribution(expr: ITeg,
     """ Apply Leibniz rule directly for moving boundaries. """
     lower_deriv, ctx1, not_ctx1 = fwd_deriv_transform(expr.lower, ctx, not_ctx)
     upper_deriv, ctx2, not_ctx2 = fwd_deriv_transform(expr.upper, ctx, not_ctx)
-    body_at_upper = substitute(expr.body, expr.dvar, upper_deriv)
-    body_at_lower = substitute(expr.body, expr.dvar, lower_deriv)
+    body_at_upper = substitute(expr.body, expr.dvar, expr.upper)
+    body_at_lower = substitute(expr.body, expr.dvar, expr.lower)
     boundary_val = upper_deriv * body_at_upper - lower_deriv * body_at_lower
     return boundary_val, {**ctx1, **ctx2}, not_ctx1 | not_ctx2
 
@@ -250,7 +245,6 @@ def fwd_deriv_transform(expr: ITeg,
 
         # Include derivative contribution from moving boundaries of integration
         boundary_val, new_ctx, new_not_ctx = boundary_contribution(expr, ctx, not_ctx)
-
         not_ctx.add((expr.dvar.name, expr.dvar.uid))
 
         moving_var_data = delta_contribution(expr, not_ctx)
