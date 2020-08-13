@@ -520,6 +520,21 @@ class VariableBranchConditionsTest(TestCase):
         deriv_integral = FwdDeriv(integral, [(t, 1)])
         self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), -0.5, places=3)
 
+    def test_nested_discontinuity_integral(self):
+        # deriv(\int_{y=0}^{1} y * \int_{x=0}^{1} (x<t) ? 0 : 1)
+        zero, one = Const(0), Const(1)
+        x, t1, t = Var('x'), Var('t1', 0.5), Var('t', 0.4)
+
+        body = IfElse(t < t1, IfElse(x < t, zero, one), one)
+        integral = Teg(zero, one, body, x)
+
+        deriv_integral = RevDeriv(integral, Tup(Const(1)))
+        self.assertAlmostEqual(evaluate(deriv_integral), -1, places=3)
+
+        # TODO: Maybe make dt1 a term rather than just t
+        deriv_integral = FwdDeriv(integral, [(t, 1)])
+        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), -1, places=3)
+
 
 class MovingBoundaryTest(TestCase):
 
