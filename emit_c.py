@@ -1,6 +1,15 @@
 from functools import reduce
 import operator
 
+def project_sizes(size1 : int, size2 : int):
+    if size1 == 1:
+        return size2
+    elif size2 == 1:
+        return size1
+    else:
+        assert size1 == size2, f'Size mismatch'
+        return size1
+
 class C_SSAVar:
     def __init__(self, name, ctype = None, size = None, assigned = False, default = None):
         self.name = name
@@ -156,13 +165,11 @@ class CEmitter:
     def _draw_varname(self, prefix="_t_"):
         if prefix not in self.var_counters.keys():
             self.var_counters[prefix] = 0
-        
+
         num = self.var_counters[prefix]
         self.var_counters[prefix] += 1
 
         new_varname = f"{prefix}{num}"
-
-        assert new_varname not in self.vars.keys(), f'Naming clash: "{new_varname}" already being used.'
 
         return new_varname
 
@@ -250,14 +257,23 @@ class CEmitter:
         out_ssavar = out_var
 
         out_ssavar.require_decl()
-        out_ssavar.set_type(code.out_var.ctype, code.out_var.size)
 
-        if code.out_var.size == 1:
+        # If no type, assign type.
+        if out_ssavar.ctype is None:
+            out_ssavar.set_type(code.out_var.ctype, code.out_var.size)
+
+        if out_ssavar.size == 1:
             return code + C_SSACode(out_ssavar, f'{out_ssavar.name} {op} {code.out_var.name};')
         else:
-            return code + C_SSACode(out_ssavar, 
-                            f'for (uint32_t i = 0; i < {out_ssavar.size}; i++) \
-                            {out_ssavar.name}[i] {op} {code.out_var.name}[i];')
+            if code.out_var.size == 1:
+                return code + C_SSACode(out_ssavar, 
+                            f'for (uint32_t _iter_ = 0; _iter_ < {out_ssavar.size}; _iter_++) ' + \
+                            f'{out_ssavar.name}[_iter_] {op} {code.out_var.name};')
+            else:
+                return code + C_SSACode(out_ssavar, 
+                            f'for (uint32_t _iter_ = 0; _iter_ < {out_ssavar.size}; _iter_++) ' + \
+                            f'{out_ssavar.name}[_iter_] {op} {code.out_var.name}[_iter_];')
+
 
     def array_assign(self, out_var, code_list):
 
@@ -277,9 +293,17 @@ class CEmitter:
                         )
 
     def condition(self, cond, if_body, else_body, out_var = None):
-        if out_var is None:
-            out_var = self.variable().out_var
+        # TODO: Temporary assertion while refactoring code.
+        assert out_var is None
 
+        # Infer type.
+        output_size = project_sizes(if_body.out_var.size, else_body.out_var.size)
+        output_type = if_body.out_var.ctype
+        assert if_body.out_var.ctype == else_body.out_var.ctype, f'Condition branches have different output types'
+
+        out_var = self.variable(ctype = output_type, size = output_size).out_var
+
+        # Make block code.
         if_block = self.block(self.assign(out_var, if_body))
         else_block = self.block(self.assign(out_var, else_body))
 
@@ -307,9 +331,11 @@ class CEmitter:
                 else:
                     decl_list.append(C_SSACode(var, f'{var.ctype} {var.name} = {var.default};'))
             else:
-                decl_list.append(C_SSACode(var, f'{var.ctype} {var.name}[{var.size}];'))
-
-        print(in_code.ctx)
+                if var.default is None:
+                    decl_list.append(C_SSACode(var, f'{var.ctype} {var.name}[{var.size}];'))
+                else:
+                    init_string = ''.join([f'{var.default},' for i in range(var.size)])[:-1]
+                    decl_list.append(C_SSACode(var, f'{var.ctype} {var.name}[{var.size}] = {{{init_string}}};'))
 
         if len(decl_list) > 0:
             all_decls = reduce(operator.add, decl_list)
@@ -343,7 +369,11 @@ class CEmitter:
                 else:
                     decl_list.append(C_SSACode(var, f'{var.ctype} {var.name} = {var.default};'))
             else:
-                decl_list.append(C_SSACode(var, f'{var.ctype} {var.name}[{var.size}];'))
+                if var.default is None:
+                    decl_list.append(C_SSACode(var, f'{var.ctype} {var.name}[{var.size}];'))
+                else:
+                    init_string = ''.join([f'{var.default},' for i in range(var.size)])[:-1]
+                    decl_list.append(C_SSACode(var, f'{var.ctype} {var.name}[{var.size}] = {{{init_string}}};'))
 
         all_decls = reduce(operator.add, decl_list)
 
@@ -391,36 +421,35 @@ class CEmitter:
         return method_code
 
     def _binary_op_(self, code1, code2, out_var = None, op = '+', out_type = None):
+        # TODO: Temporary assertion for code refactor
+        assert out_var is None
+
+        # Infer type
+        output_size = project_sizes(code1.out_var.size, code2.out_var.size)
+        output_type = code1.out_var.ctype if out_type is None else out_type
         assert code1.out_var.ctype == code2.out_var.ctype, f'Operands are of incompatible types'
-        assert code1.out_var.size == code2.out_var.size, f'Operands are of incompatible sizes'
 
-        if out_var is None:
-            output = self.variable().out_var
-        else:
-            output = out_var
-
+        output = self.variable(ctype = output_type, size = output_size).out_var
         output.require_decl()
 
-        if output.ctype is None:
-            if out_type is None:
-                # Automatic type inference.
-                output.ctype = code1.out_var.ctype
-                output.size = code1.out_var.size
-            else:
-                output.ctype = out_type
-                output.size = code1.out_var.size
-        else:
-            assert code1.out_var.ctype == code2.out_var.ctype, f'Expected output type is incompatible with operand types'
-            assert code1.out_var.size == code2.out_var.size, f'Expected output size is incompatible with operand sizes'
-
-        if code1.out_var.size == 1:
+        if output.size == 1:
             return code1 + code2 + C_SSACode(output, 
                 f'{output.name} = {code1.out_var.name} {op} {code2.out_var.name};'
             )
         else:
+            if code1.out_var.size == 1:
+                code1_access = f'{code1.out_var.name}'
+            else:
+                code1_access = f'{code1.out_var.name}[_iter_]'
+
+            if code2.out_var.size == 1:
+                code2_access = f'{code2.out_var.name}'
+            else:
+                code2_access = f'{code2.out_var.name}[_iter_]'
+            
             return code1 + code2 + C_SSACode(output, 
-                f'for (uint32_t i = 0; i < {output.size}; i++) \
-                  {output.name}[i] = {code1.out_var.name}[i] {op} {code2.out_var.name}[i];'
+                f'for (uint32_t _iter_ = 0; _iter_ < {output.size}; _iter_++) ' + \
+                f'{output.name}[_iter_] = {code1_access} {op} {code2_access};'
             )
 
     def mul(self, code1, code2, out_var = None):

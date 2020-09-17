@@ -51,8 +51,12 @@ def substitute(expr: ITeg, this_expr: ITeg, that_expr: ITeg) -> ITeg:
         # Ignore shadowed variables
         if expr.dvar == this_expr:
             return expr
-        body = substitute(expr.body, this_expr, that_expr)
-        return Teg(expr.lower, expr.upper, body, expr.dvar)
+        return Teg(
+                    substitute(expr.lower, this_expr, that_expr), 
+                    substitute(expr.upper, this_expr, that_expr), 
+                    substitute(expr.body, this_expr, that_expr), 
+                    expr.dvar
+                )
 
     elif isinstance(expr, Tup):
         return Tup(*(substitute(child, this_expr, that_expr) for child in expr))
