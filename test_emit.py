@@ -88,6 +88,8 @@ def compileProgram(program):
 def evaluate(expr: ITeg, num_samples = 100, ignore_cache = False):
     return runProgram(compileProgram(emit(expr, target = 'C', num_samples = num_samples)))
 
+# TODO: Move everything to test.py
+
 class TestArithmetic(TestCase):
 
     def test_linear(self):

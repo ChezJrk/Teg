@@ -20,10 +20,8 @@ class ITeg:
         for child in self.children:
             child.bind_variable(var, value)
 
-
 class PiecewiseAffine(ITeg):
     pass
-
 
 class Var(PiecewiseAffine):
     global_uid = 0
