@@ -106,6 +106,20 @@ class TegVariableOverloads:
         return f'Var(name={self.name}{value})'
 
 
+@overloads(Placeholder)
+class TegPlaceholderOverloads:
+
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and self.signature == self.signature)
+
+    def __str__(self):
+        return f"{self.name}"
+
+    def __repr__(self):
+        return f'Placeholder(name={self.name}, signature={self.signature})'
+
+
 @overloads(Const)
 class TegConstantOverloads:
 

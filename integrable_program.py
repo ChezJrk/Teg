@@ -40,7 +40,6 @@ class Var(PiecewiseAffine):
         if (self.name, self.uid) == (var.name, var.uid):
             self.value = value
 
-
 class Const(Var):
 
     def __init__(self, value: Optional[float], name: str = ''):
@@ -49,6 +48,41 @@ class Const(Var):
     def bind_variable(self, var: Var, value: Optional[float] = None) -> None:
         pass
 
+
+class TegVar(Var):
+    def __init__(self, name: str = '', uid: Optional[int] = None):
+        super(Const, self).__init__(name=name)
+
+    def bind_variable(self, var: Var, value: Optional[float] = None) -> None:
+        if (self.name, self.uid) == (var.name, var.uid):
+            self.value = value
+
+# Teg internal element. Cannot exist in full programs.
+class Placeholder(Var):
+    def __init__(self, name: str = '', signature: str = ''):
+        super(Const, self).__init__(name=name, signature=signature)
+
+    def bind_variable(self, var: Var, value: Optional[float] = None) -> None:
+        if (self.name, self.uid) == (var.name, var.uid):
+            self.value = value
+
+# Teg internal element. Cannot exist in full programs.
+class TegRemap(ITeg):
+    """ 
+        Intermediate element that holds a variable remapping as well as target expressions.
+    """
+    def __init__(self, name: str = '', expr: ITeg, 
+                       map: Dict[Tuple[str, int], Tuple[str, int]], 
+                       exprs: Dict[Tuple[str, int], Tuple[str, int]],
+                       upper_bounds: Dict[Tuple[str, int], ITeg],
+                       lower_bounds: Dict[Tuple[str, int], ITeg]):
+        super(TegRemap, self).__init__(children = [expr])
+        self.map = map
+        self.upper_bounds
+        self.lower_bounds
+        self.expr = expr
+        self.exprs = exprs
+        self.operation = None # Cannot eval.
 
 class Add(PiecewiseAffine):
     name = 'add'
