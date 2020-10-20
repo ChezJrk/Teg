@@ -2,6 +2,7 @@
 import numpy as np
 
 from integrable_program import (
+    Placeholder,
     ITeg,
     Const,
     Var,

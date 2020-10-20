@@ -791,5 +791,6 @@ class AffineConditionsTest(TestCase):
         self.assertAlmostEqual(evaluate(simplify(deriv_integral)), 1.5)
 
 
+
 if __name__ == '__main__':
     unittest.main()

@@ -51,7 +51,7 @@ class Const(Var):
 
 class TegVar(Var):
     def __init__(self, name: str = '', uid: Optional[int] = None):
-        super(Const, self).__init__(name=name)
+        super(TegVar, self).__init__(name=name)
 
     def bind_variable(self, var: Var, value: Optional[float] = None) -> None:
         if (self.name, self.uid) == (var.name, var.uid):
@@ -60,7 +60,8 @@ class TegVar(Var):
 # Teg internal element. Cannot exist in full programs.
 class Placeholder(Var):
     def __init__(self, name: str = '', signature: str = ''):
-        super(Const, self).__init__(name=name, signature=signature)
+        super(Placeholder, self).__init__(name=name)
+        self.signature = signature
 
     def bind_variable(self, var: Var, value: Optional[float] = None) -> None:
         if (self.name, self.uid) == (var.name, var.uid):
@@ -71,11 +72,12 @@ class TegRemap(ITeg):
     """ 
         Intermediate element that holds a variable remapping as well as target expressions.
     """
-    def __init__(self, name: str = '', expr: ITeg, 
+    def __init__(self, expr: ITeg, 
                        map: Dict[Tuple[str, int], Tuple[str, int]], 
                        exprs: Dict[Tuple[str, int], Tuple[str, int]],
                        upper_bounds: Dict[Tuple[str, int], ITeg],
-                       lower_bounds: Dict[Tuple[str, int], ITeg]):
+                       lower_bounds: Dict[Tuple[str, int], ITeg], 
+                       name: str = 'TegRemap'):
         super(TegRemap, self).__init__(children = [expr])
         self.map = map
         self.upper_bounds

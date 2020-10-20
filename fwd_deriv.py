@@ -14,6 +14,9 @@ from integrable_program import (
     Teg,
     Tup,
     LetIn,
+    Placeholder,
+    TegVar,
+    TegRemap,
     Ctx,
     ITegBool,
     Bool,
@@ -23,6 +26,7 @@ from integrable_program import (
     false,
 )
 from substitute import substitute
+from remap import remap, is_remappable
 
 """
 def extract_constants_from_affine(expr: ITeg) -> List[ITeg]:
@@ -66,8 +70,8 @@ def combine_affine_sets(affine_list: Dict[Tuple[str, int], ITeg], op):
 
             # Reduce combined variables to primitive variables.
             primitive_variable = None
-            is_sample = [ for sub_var in combined_variable if sub_var != -1 ]
-            if reduce(is_sample, operator.or) == False:
+            is_sample = [ sub_var != -1 for sub_var in combined_variable ]
+            if reduce(is_sample, operator.or_) == False:
                 primitive_variable = -1
             elif is_sample.count(True) == 1:
                 primitive_variable = combined_variable[is_sample.index(True)]
@@ -98,7 +102,7 @@ def is_expr_parametric(expr: ITeg) -> bool:
     else:
         return True
 
-    return reduce([ is_expr_parametric(child) for child in expr.children ], operator.and)
+    return reduce([ is_expr_parametric(child) for child in expr.children ], operator.and_)
 
 
 def check_affine_tree(expr: ITeg) -> bool:
@@ -106,7 +110,7 @@ def check_affine_tree(expr: ITeg) -> bool:
         cvals = [ is_expr_parameteric(child) for child in expr.children ]
         return (cvals.count(False) == 1) and check_affine_tree(expr.children[cvals.index(False)])
     elif isinstance(expr, Add): 
-        return reduce([ check_affine_tree(child) for child in expr.children ], operator.and)
+        return reduce([ check_affine_tree(child) for child in expr.children ], operator.and_)
     elif isinstance(expr, TegVar):
         return True
     elif is_expr_parameteric(expr):
@@ -131,7 +135,7 @@ def extract_coefficients_from_affine_tree(expr: ITeg) -> List[ITeg]:
 
 def affine_to_linear(affine_set: Dict[Tuple[str, int], ITeg]):
     linear_set = dict(affine_set)
-    linear_set.pop(('__const', -1))
+    linear_set.pop(('__const__', -1))
 
 def rotate_to_target(linear_set: Dict[Tuple[str, int], ITeg], target_index: int):
     idnames = linear_set.keys()
@@ -147,7 +151,7 @@ def rotate_to_target(linear_set: Dict[Tuple[str, int], ITeg], target_index: int)
         return reduce([exprs[i] * TegVar(name=name, id=id) for i in range(num_vars)], operator.add)
     elif target_index < len(linear_set):
         i = target_index
-        return reduce([ (1 if i == j else 0) - 
+        return reduce([ (1 if i == j else 0) - \
                 (exprs[i] * exprs[j]) / (1 + exprs[0]) \
                 * TegVar(name=sorted_idnames[j][0], id=sorted_idnames[j][1]) \
                 for j in range(num_vars)], operator.add)
@@ -170,7 +174,7 @@ def rotate_to_source(linear_set: Dict[Tuple[str, int], ITeg], source_index: int,
         return reduce([(-1 if sid == 0 else 1) * exprs[i] * target_vars[i] for i in range(num_vars)], operator.add)
     elif source_index < len(linear_set):
         i = source_index
-        return reduce([ (1 if i == j else 0) - 
+        return reduce([ (1 if i == j else 0) - \
                 (exprs[i] * exprs[j]) / (1 + exprs[0]) \
                 * target_vars[j] \
                 for j in range(num_vars)], operator.add)
@@ -188,15 +192,14 @@ def bounds_of(affine_set: Dict[Tuple[str, int], ITeg], target_index: int):
         raise ValueError(f'Requested target coordinate index: {target_index} is invalid.')
     elif target_index < len(affine_set):
         i = target_index
-        coeff = (1 if i == j else 0) - 
-                (exprs[i] * exprs[j]) / (1 + exprs[0])
-        return  reduce([ coeff \
+        coeff = (1 if i == j else 0) - \
+                    (exprs[i] * exprs[j]) / (1 + exprs[0])
+        return reduce([ coeff \
                     * IfElse( coeff > 0, 
                             Placeholder(signature=f"{sorted_idnames[j][0]}_lb"), 
                             Placeholder(signature=f"{sorted_idnames[j][0]}_ub"), 
                         ) \
-                for j in range(num_vars)], operator.add),
-                reduce([ coeff \
+                for j in range(num_vars)], operator.add), reduce([ coeff \
                     * IfElse( coeff > 0, 
                             Placeholder(signature=f"{sorted_idnames[j][0]}_ub"), 
                             Placeholder(signature=f"{sorted_idnames[j][0]}_lb"), 
@@ -344,7 +347,11 @@ def delta_contribution(expr: Teg,
     return moving_var_data
 
 def transform_expr(expr, linear_set):
-    for sub_var
+    for idname, linear_expr in linear_set:
+        uid, name = idname
+        expr = substitute(expr, TegVar(uid = uid, name = name), linear_expr)
+
+    return expr
 
 def rotated_delta_contribution(expr: Teg,
                        not_ctx: Set[Tuple[str, int]]
@@ -434,7 +441,7 @@ def boundary_contribution(expr: ITeg,
 def resolve_placeholders(expr: ITeg,
                          map: Dict[str, ITeg]):
     """ Substitute placeholders for their expressions """
-    for key, p_expr in map:
+    for key, p_expr in map.items():
         expr = substitute(expr, Placeholder(signature=key), p_expr)
 
     return expr
@@ -445,8 +452,11 @@ def fwd_deriv_transform(expr: ITeg,
                         not_ctx: Set[Tuple[str, int]]) -> Tuple[ITeg, Dict[Tuple[str, int], str], Set[Tuple[str, int]]]:
     """Compute the source-to-source foward derivative of the given expression."""
 
-    if isinstance(expr, Const):
+    if isinstance(expr, (Const, TegVar, Placeholder,)):
         expr = Const(0)
+
+    elif isinstance(expr, (TegRemap,)):
+        assert False, "Cannot take derivative of transient elements."
 
     elif isinstance(expr, Var):
         # NOTE: No expressions with the name "d{expr.name}" are allowed
@@ -509,8 +519,8 @@ def fwd_deriv_transform(expr: ITeg,
         # Resolve any placeholders due to Teg bounds.
         resolve_placeholders(body, 
                                 {
-                                    f'{expr.dvar.id}_ub':expr.upper, 
-                                    f'{expr.dvar.id}_lb':expr.lower
+                                    f'{expr.dvar.uid}_ub':expr.upper, 
+                                    f'{expr.dvar.uid}_lb':expr.lower
                                 }
                             )
 

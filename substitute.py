@@ -4,15 +4,23 @@ from integrable_program import (
     Var,
     Add,
     Mul,
+    Invert,
     IfElse,
     Teg,
     Tup,
     LetIn,
+    Placeholder,
+    TegVar,
+    TegRemap,
+    Ctx,
+    ITegBool,
     Bool,
     And,
     Or,
-    Invert,
+    true,
+    false,
 )
+
 import operator_overloads  # noqa: F401
 
 
@@ -25,8 +33,16 @@ def substitute(expr: ITeg, this_expr: ITeg, that_expr: ITeg) -> ITeg:
     elif expr == this_expr:
         return that_expr
 
-    elif isinstance(expr, Var):
+    elif isinstance(expr, (Var, TegVar, Placeholder)):
         return expr
+
+    elif isinstance(expr, TegRemap):
+        return TegRemap(
+                        expr = substitute(expr.expr, this_expr, that_expr),
+                        exprs = [substitute(e, this_expr, that_expr) for e in expr.exprs],
+                        lower_bounds = [substitute(e, this_expr, that_expr) for e in expr.lower_bounds],
+                        upper_bounds = [substitute(e, this_expr, that_expr) for e in expr.upper_bounds]
+                    )
 
     elif isinstance(expr, Add):
         expr1, expr2 = expr.children
