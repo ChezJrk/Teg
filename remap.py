@@ -13,6 +13,7 @@ from integrable_program import (
     Const,
     Var,
     TegVar,
+    SmoothFunc,
     Add,
     Mul,
     Invert,
@@ -29,6 +30,11 @@ from integrable_program import (
     false,
 )
 
+from smooth import (
+    Sqrt,
+    Sqr
+)
+
 from integrable_program import (
     Placeholder,
     TegRemap,
@@ -36,9 +42,8 @@ from integrable_program import (
 
 from substitute import substitute
 
-
 def is_remappable(expr: ITeg):
-    return remap_gather(expr) is not None
+    return remap_gather(expr)[0] is not None
 
 def remap(expr: ITeg):
     """
@@ -47,14 +52,30 @@ def remap(expr: ITeg):
         of the tree and applying variable rewrites to them.
     """
 
+    print(expr)
+    print("Remapping...")
+
+    # Extract remap tree and lift integrals out.
     remap_expr, remapped_tree, teg_list = remap_gather(expr)
     if remap_expr is None:
         return expr
+
+    print("Remap expr: ")
+    print(remap_expr)
+
+    print("Remapped tree: ")
+    print(remapped_tree)
 
     assert is_remappable(remapped_tree) == False, f'Remapped expression is not a linear subtree in the provided tree'
 
     expr = substitute(expr, remap_expr, Const(0))
 
+    # Do variable substitutions.
+    for var, expr in remap_expr.exprs.items():
+        print(f"Eliminating: {var} with {expr}")
+        remapped_tree = substitute(remapped_tree, TegVar(uid=var[1], name=var[0]), expr)
+
+    # Add integral operators for the new variables back to the top.
     new_expr = remapped_tree
     for integral in teg_list:
         dvar, lexpr, uexpr = integral
@@ -62,11 +83,19 @@ def remap(expr: ITeg):
 
     expr = expr + new_expr
 
+    print(expr)
+
     return expr
 
 def remap_gather(expr: ITeg):
     if isinstance(expr, TegRemap):
-        return expr, expr, []
+        return expr, expr.expr, []
+
+    elif isinstance(expr, SmoothFunc):
+        remap_expr, remapped_tree, teg_list = remap_gather(expr.expr)
+        assert remap_expr is not False, f'Remapped expression is not linear in the subtree'
+
+        return None, None, []
 
     elif isinstance(expr, Teg):
         remap_expr, remapped_tree, teg_list = remap_gather(expr.body)
@@ -83,8 +112,12 @@ def remap_gather(expr: ITeg):
             lexpr = remap_expr.lower_bounds[(new_name, new_id)]
             uexpr = remap_expr.upper_bounds[(new_name, new_id)]
 
-            new_dvar = TegVar(name = new_name, id = new_id)
+            new_dvar = TegVar(name = new_name, uid = new_id)
             #remapped_tree = Teg(remapped_tree, new_dvar, lexpr, uexpr)
+
+            # Add bounds check. This will be transformed later in the process.
+            bounds_check = (expr.lower < expr.dvar) & (expr.upper > expr.dvar)
+            remapped_tree = IfElse(bounds_check, remapped_tree, 0)
 
             return remap_expr, remapped_tree, teg_list + [(new_dvar, lexpr, uexpr)]
 
@@ -122,9 +155,13 @@ def remap_gather(expr: ITeg):
     
     elif isinstance(expr, Invert):
         remap_expr, remapped_tree, teg_list = remap_gather(expr.child)
-        return (remap_expr,
+
+        if remap_expr is not None:
+            return (remap_expr,
                Invert(remapped_tree),
                teg_list)
+        else:
+            return (None, None, [])
 
     elif isinstance(expr, Tup):
         for index, child in enumerate(expr.children): 
@@ -159,7 +196,7 @@ def remap_gather(expr: ITeg):
         remap_expr, remapped_tree, teg_list = remap_gather(expr.else_body)
         if remap_expr is not None:
             return remap_expr, IfElse(cond, expr.if_body, remapped_tree), teg_list
-        
+
         return None, None, []
 
     elif isinstance(expr, (Var, Const, TegVar)):
@@ -167,7 +204,8 @@ def remap_gather(expr: ITeg):
 
     else:
         # Warning for future proofing.
-        print("WARNING: Remap traversal doesn't support this type")
+        print(f"WARNING: Remap traversal doesn't support this type {type(expr)}")
+        print(expr)
         return None, None, []
 
     return None, None, []

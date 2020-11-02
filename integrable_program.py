@@ -13,7 +13,12 @@ class ITeg:
 
     def __init__(self, children: List):
         super(ITeg, self).__init__()
+
         self.children = children
+
+        for child in self.children:
+            assert isinstance(child, ITeg), f'Non-ITeg expression {child} cannot be used in graph.'
+
         self.value = None
 
     def bind_variable(self, var: 'Var', value: Optional[float] = None) -> None:
@@ -49,13 +54,34 @@ class Const(Var):
         pass
 
 
+class SmoothFunc(ITeg):
+    """
+        Arbitrary smooth function of one variable with symbolically defined derivatives.
+        SmoothFunc is an abstract class that children must implement.
+    """
+    def __init__(self, expr: ITeg, name: str = 'SmoothFunc'):
+        super(SmoothFunc, self).__init__(children = [expr])
+        self.expr = expr
+        self.name = name
+
+    def fwd_deriv(self, in_deriv_expr: ITeg) -> ITeg:
+        raise NotImplemented()
+
+    def rev_deriv(self, out_deriv_expr: ITeg) -> ITeg:
+        raise NotImplemented()
+
+    def operation(self, in_value):
+        raise NotImplemented() 
+
+
 class TegVar(Var):
     def __init__(self, name: str = '', uid: Optional[int] = None):
-        super(TegVar, self).__init__(name=name)
+        super(TegVar, self).__init__(name=name, uid = uid)
 
     def bind_variable(self, var: Var, value: Optional[float] = None) -> None:
         if (self.name, self.uid) == (var.name, var.uid):
             self.value = value
+
 
 # Teg internal element. Cannot exist in full programs.
 class Placeholder(Var):
@@ -67,6 +93,7 @@ class Placeholder(Var):
         if (self.name, self.uid) == (var.name, var.uid):
             self.value = value
 
+
 # Teg internal element. Cannot exist in full programs.
 class TegRemap(ITeg):
     """ 
@@ -74,17 +101,19 @@ class TegRemap(ITeg):
     """
     def __init__(self, expr: ITeg, 
                        map: Dict[Tuple[str, int], Tuple[str, int]], 
-                       exprs: Dict[Tuple[str, int], Tuple[str, int]],
+                       exprs: Dict[Tuple[str, int], ITeg],
                        upper_bounds: Dict[Tuple[str, int], ITeg],
                        lower_bounds: Dict[Tuple[str, int], ITeg], 
                        name: str = 'TegRemap'):
         super(TegRemap, self).__init__(children = [expr])
         self.map = map
-        self.upper_bounds
-        self.lower_bounds
+        self.upper_bounds = upper_bounds
+        self.lower_bounds = lower_bounds
         self.expr = expr
         self.exprs = exprs
         self.operation = None # Cannot eval.
+        self.name = name
+
 
 class Add(PiecewiseAffine):
     name = 'add'
@@ -105,7 +134,7 @@ class Invert(ITeg):
 
 class Teg(ITeg):
 
-    def __init__(self, lower: Var, upper: Var, body: ITeg, dvar: Var):
+    def __init__(self, lower: Var, upper: Var, body: ITeg, dvar: TegVar):
         super(Teg, self).__init__(children=[try_making_teg_const(e) for e in (lower, upper, body)])
         self.lower, self.upper, self.body = self.children
         self.dvar = dvar

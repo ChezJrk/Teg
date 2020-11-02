@@ -3,6 +3,7 @@ import numpy as np
 
 from integrable_program import (
     Placeholder,
+    SmoothFunc,
     ITeg,
     Const,
     Var,
@@ -10,6 +11,7 @@ from integrable_program import (
     Mul,
     IfElse,
     Teg,
+    TegVar,
     Tup,
     LetIn,
     Invert,
@@ -39,6 +41,7 @@ class TegOverloads:
         return self + (-try_making_teg_const(other))
 
     def __mul__(self, other):
+        assert isinstance(other, ITeg), f'Attempted to multiply a non-ITeg {other} with an ITeg expression'
         return Mul([self, try_making_teg_const(other)])
 
     def __truediv__(self, other):
@@ -48,6 +51,7 @@ class TegOverloads:
         return try_making_teg_const(other) + self
 
     def __rmul__(self, other):
+        assert isinstance(other, ITeg), f'Attempted to multiply a non-ITeg {other} with an ITeg expression'
         return try_making_teg_const(other) * self
 
     def __rtruediv__(self, other):
@@ -89,6 +93,16 @@ class TegOverloads:
     def __geq__(self, other):
         return Bool(other, self, allow_eq=True)
 
+    def __ete__(self):
+        ete_string = f'('
+        for child in self.children:
+            ete_string = f'{ete_string} {child.__ete__},'
+        if len(self.children) >= 1:
+            ete_string = ete_string[:-1]
+
+        #if child.value 
+        ete_string = ete_string + f':{child.value}'
+
 
 @overloads(Var)
 class TegVariableOverloads:
@@ -100,11 +114,30 @@ class TegVariableOverloads:
 
     def __str__(self):
         value = '' if self.value is None else f'={self.value}'
-        return f"{self.name}{value}"
+        return f"{self.name}({self.uid}){value}"
 
     def __repr__(self):
         value = '' if self.value is None else f', value={self.value}'
         return f'Var(name={self.name}{value})'
+
+    def __ete__(self):
+        return f'Var_{self.name}:{self.value}'
+
+@overloads(TegVar)
+class TegTegVariableOverloads:
+
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and self.name == other.name
+                and self.uid == other.uid)
+
+    def __str__(self):
+        value = '' if self.value is None else f'={self.value}'
+        return f"{self.name}({self.uid}){value}"
+
+    def __repr__(self):
+        value = '' if self.value is None else f', value={self.value}'
+        return f'TegVar(name={self.name}{value})'
 
 
 @overloads(Placeholder)
@@ -196,6 +229,19 @@ class TegConditionalOverloads:
     def __repr__(self):
         return f'IfElse({repr(self.cond)}, {repr(self.if_body)}, {repr(self.else_body)})'
 
+@overloads(SmoothFunc)
+class SmoothFuncOverloads:
+
+    def __str__(self):
+        return f'{self.name}({self.expr})'
+
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and len(self.children) == len(other.children)
+                and self.expr == other.expr)
+
+    def __repr__(self):
+        return f'{self.name}({repr(self.expr)})'
 
 @overloads(Tup)
 class TegTupleOverloads:

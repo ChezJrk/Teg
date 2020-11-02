@@ -10,6 +10,7 @@ from integrable_program import (
     Tup,
     LetIn,
     Placeholder,
+    SmoothFunc,
     TegVar,
     TegRemap,
     Ctx,
@@ -31,6 +32,7 @@ def substitute(expr: ITeg, this_expr: ITeg, that_expr: ITeg) -> ITeg:
         return expr
 
     elif expr == this_expr:
+        print(f"Matched {this_expr} -> {that_expr}")
         return that_expr
 
     elif isinstance(expr, (Var, TegVar, Placeholder)):
@@ -56,6 +58,9 @@ def substitute(expr: ITeg, this_expr: ITeg, that_expr: ITeg) -> ITeg:
 
     elif isinstance(expr, Invert):
         return Invert(substitute(expr.child, this_expr, that_expr))
+
+    elif isinstance(expr, SmoothFunc):
+        return type(expr)(substitute(expr.expr, this_expr, that_expr))
 
     elif isinstance(expr, IfElse):
         cond = substitute(expr.cond, this_expr, that_expr)

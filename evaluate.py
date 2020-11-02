@@ -14,6 +14,7 @@ from integrable_program import (
     And,
     Or,
     Invert,
+    SmoothFunc
 )
 from derivs import FwdDeriv, RevDeriv
 
@@ -30,6 +31,9 @@ def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
 
     elif isinstance(expr, (Add, Mul)):
         expr.value = expr.operation(*[evaluate(e, num_samples, ignore_cache) for e in expr.children])
+
+    elif isinstance(expr, SmoothFunc):
+        expr.value = expr.operation(evaluate(expr.expr))
 
     elif isinstance(expr, Invert):
         expr.value = 1 / evaluate(expr.child, num_samples, ignore_cache)
@@ -94,4 +98,5 @@ def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported derivative.')
 
+    assert expr.value is not None, f'Error evaluating expression {expr}'
     return expr.value

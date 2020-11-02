@@ -14,9 +14,8 @@ from integrable_program import (
     Teg,
     Tup,
     LetIn,
-    Placeholder,
     TegVar,
-    TegRemap,
+    SmoothFunc,
     Ctx,
     ITegBool,
     Bool,
@@ -25,10 +24,21 @@ from integrable_program import (
     true,
     false,
 )
+
+from smooth import (
+    Sqrt,
+    Sqr
+)
+
+from integrable_program import (
+    Placeholder,
+    TegRemap
+)
+
 from substitute import substitute
 from remap import remap, is_remappable
 
-"""
+
 def extract_constants_from_affine(expr: ITeg) -> List[ITeg]:
 
     if isinstance(expr, Const):
@@ -57,32 +67,41 @@ def extract_variables_from_affine(expr: ITeg) -> Dict[Tuple[str, int], ITeg]:
 
     else:
         raise ValueError(f'The expression of type "{type(expr)}" results in a computation that is not affine.')
-"""
 
-def combine_affine_sets(affine_list: Dict[Tuple[str, int], ITeg], op):
+
+def combine_affine_sets(affine_lists: List[Dict[Tuple[str, int], ITeg]], op):
     # Combine affine sets. Assumes the list satisfies affine properties.
     combined_set = {}
     if op == operator.mul:
-        affine_products = product(affine_list.items())
+        # Cartesian product. Produce every variable combination.
+        # TODO: Fix this asap..
+        #print([ item for item in affine_lists[0].items() ])
+        affine_products = product(*[affine_list.items() for affine_list in affine_lists])
+        print("affine_products")
+        #print([ a for a in affine_products ])
         for affine_product in affine_products:
-            combined_variable = reduce(affine_product.keys(), operator.sum)
-            combined_expr = reduce(affine_product.keys(), operator.mul)
+            combined_variable = [ var_expr[0] for var_expr in affine_product ]
+            print(combined_variable)
+            k = [ var_expr[1] for var_expr in affine_product ]
+            print(k)
+            combined_expr = reduce(operator.mul, k)
 
             # Reduce combined variables to primitive variables.
             primitive_variable = None
-            is_sample = [ sub_var != -1 for sub_var in combined_variable ]
-            if reduce(is_sample, operator.or_) == False:
-                primitive_variable = -1
+            is_sample = [ sub_var != ('__const__', -1) for sub_var in combined_variable ]
+            if reduce(operator.or_, is_sample) == False:
+                primitive_variable = ('__const__', -1)
             elif is_sample.count(True) == 1:
                 primitive_variable = combined_variable[is_sample.index(True)]
             else:
                 raise ValueError(f'Error when processing affine sets, encountered non-affine combination.')
 
             combined_set[primitive_variable] = combined_expr
+        print(combined_set)
 
     elif op == operator.add:
-        for affine_set in affine_list:
-            for variable, expr in affine_set:
+        for affine_list in affine_lists:
+            for variable, expr in affine_list.items():
                 if variable in combined_set.keys():
                     combined_set[variable] = combined_set[variable] + expr
                 else:
@@ -95,9 +114,9 @@ def combine_affine_sets(affine_list: Dict[Tuple[str, int], ITeg], op):
 
 
 def is_expr_parametric(expr: ITeg) -> bool:
-    if isinstance(expr, Sample):
+    if isinstance(expr, TegVar):
         return False
-    elif isinstance(expr, (Parameter, Const)):
+    elif isinstance(expr, (Var, Const)):
         return True
     else:
         return True
@@ -128,14 +147,33 @@ def extract_coefficients_from_affine_tree(expr: ITeg) -> List[ITeg]:
         return combine_affine_sets(children_coeffs, op=operator.add)
     elif isinstance(expr, TegVar):
         return {(expr.name, expr.uid): Const(1)}
-    elif is_expr_parameteric(expr):
+    elif is_expr_parametric(expr):
         return {('__const__', -1): expr}
     else:
         return {('__const__', -1): Const(0)}
 
+def constant_coefficient(affine_set: Dict[Tuple[str, int], ITeg]):
+    if ('__const__', -1) in affine_set:
+        return affine_set[('__const__', -1)]
+    else:
+        return Const(0)
+
 def affine_to_linear(affine_set: Dict[Tuple[str, int], ITeg]):
+    print("affine_to_linear: ", affine_set)
     linear_set = dict(affine_set)
     linear_set.pop(('__const__', -1))
+    return linear_set
+
+def normalize_linear_set(linear_set: Dict[Tuple[str, int], ITeg]):
+    normalization = Sqrt(reduce(operator.add, [Sqr(expr) for var, expr in linear_set.items()]))
+    print('normalization')
+    print(normalization)
+
+    normalized_set = dict([ (var, expr * Invert(normalization)) for var, expr in linear_set.items() ])
+    print('normalized_set')
+    print(normalized_set)
+
+    return normalized_set, normalization
 
 def rotate_to_target(linear_set: Dict[Tuple[str, int], ITeg], target_index: int):
     idnames = linear_set.keys()
@@ -146,45 +184,49 @@ def rotate_to_target(linear_set: Dict[Tuple[str, int], ITeg], target_index: int)
 
     # source_vars[i] = TegVar(name=f'a_{i}', id=sorted_ids[i])
 
+    print("Sorted idnames: ", sorted_idnames)
     if target_index == 0:
-        name, id = sorted_idnames[i]
-        return reduce([exprs[i] * TegVar(name=name, id=id) for i in range(num_vars)], operator.add)
+        return reduce(operator.add, [exprs[i] * TegVar(name=sorted_idnames[i][0], uid=sorted_idnames[i][1]) for i in range(num_vars)])
     elif target_index < len(linear_set):
         i = target_index
-        return reduce([ (1 if i == j else 0) - \
+        return reduce(operator.add, [ (Const(1) if i == j else Const(0)) - \
                 (exprs[i] * exprs[j]) / (1 + exprs[0]) \
-                * TegVar(name=sorted_idnames[j][0], id=sorted_idnames[j][1]) \
-                for j in range(num_vars)], operator.add)
+                * TegVar(name=sorted_idnames[j][0], uid=sorted_idnames[j][1]) \
+                for j in range(num_vars)])
     else:
         raise ValueError(f'Requested target coordinate index: {target_index} is out of bounds.')
 
-def var_list(linear_set):
-    idnames = linear_set.keys()
-    sorted_idnames = sort(idnames, key=lambda a:a[1])
-    return sorted_idnames
+def var_list(linear_set: Dict[Tuple[str, int], ITeg]):
+    idnames = list(linear_set.keys())
+    idnames.sort(key=lambda a:a[1])
+    print("var_list: ", idnames)
+    return idnames
 
 def rotate_to_source(linear_set: Dict[Tuple[str, int], ITeg], source_index: int, target_vars: List[TegVar]):
-    idnames = linear_set.keys()
     sorted_idnames = var_list(linear_set)
 
     num_vars = len(sorted_idnames)
     exprs = [linear_set[idname] for idname in sorted_idnames]
-
+    print(exprs)
+    print(target_vars)
     if source_index == 0:
-        return reduce([(-1 if sid == 0 else 1) * exprs[i] * target_vars[i] for i in range(num_vars)], operator.add)
+        return reduce(operator.add, [(Const(-1) if i == 0 else Const(1)) * exprs[i] * target_vars[i] for i in range(num_vars)])
     elif source_index < len(linear_set):
         i = source_index
-        return reduce([ (1 if i == j else 0) - \
+        return reduce(operator.add, 
+            [ (Const(1) if i == j else Const(0)) - \
                 (exprs[i] * exprs[j]) / (1 + exprs[0]) \
                 * target_vars[j] \
-                for j in range(num_vars)], operator.add)
+                for j in range(num_vars)])
     else:
         raise ValueError(f'Requested source coordinate index: {source_index} is invalid.')
 
 def bounds_of(affine_set: Dict[Tuple[str, int], ITeg], target_index: int):
     # Return bounds using placeholders.
-    idnames = affine_set.keys()
-    sorted_idnames = sort(idnames, key=lambda a:a[1])
+    # idnames = affine_set.keys()
+    # sorted_idnames = sort(idnames, key=lambda a:a[1])
+
+    sorted_idnames = var_list(affine_to_linear(affine_set))
     num_vars = len(sorted_idnames)
     exprs = [affine_set[idname] for idname in sorted_idnames]
 
@@ -271,15 +313,14 @@ def solve_for_dvar(expr: ITeg, var: ITeg):
         inverse += Const(-prod(cs) / ck_val) * v
     return inverse
 
-
 def extract_moving_discontinuities(expr: ITeg,
                                    var: Var,
                                    not_ctx: Set[Tuple[str, int]],
                                    banned_variables: Set[Tuple[(str, int)]]) -> Iterable[Tuple[ITeg, ITeg]]:
-    """Identify all subexpressions producing a moving discontinuity.
-
-    Concretely, this means finding each branching statement including
-    the integration variable and a variable defined in an outside context.
+    """ 
+        Identify all subexpressions producing a moving discontinuity.
+        Concretely, this means finding each branching statement including
+        the integration variable and a variable defined in an outside context.
     """
     if isinstance(expr, IfElse):
         yield from moving_discontinuities_in_boolean(expr.cond, var, not_ctx, banned_variables)
@@ -347,7 +388,7 @@ def delta_contribution(expr: Teg,
     return moving_var_data
 
 def transform_expr(expr, linear_set):
-    for idname, linear_expr in linear_set:
+    for idname, linear_expr in linear_set.items():
         uid, name = idname
         expr = substitute(expr, TegVar(uid = uid, name = name), linear_expr)
 
@@ -360,67 +401,80 @@ def rotated_delta_contribution(expr: Teg,
 
     # Descends into all subexpressions extracting moving discontinuities
     moving_var_data, considered_bools = [], []
+    print("Building delta contribution expressions")
     for discont_bool in extract_moving_discontinuities(expr.body, expr.dvar, not_ctx.copy(), set()):
+        print("Processing boolean..")
         try:
             considered_bools.index(discont_bool)
         except ValueError:
             considered_bools.append(discont_bool)
 
+            print(discont_bool.left_expr - discont_bool.right_expr)
+
             # Extract rotation.
             affine_set = extract_coefficients_from_affine_tree(discont_bool.left_expr - discont_bool.right_expr)
             linear_set = affine_to_linear(affine_set)
+            normalized_set, normalization = normalize_linear_set(linear_set)
 
             num_tegvars = len(linear_set)
 
+            # Extract source variables (in order).
+            source_vars = var_list(linear_set)
             # Create rotated variables.
             target_vars = [TegVar(name = f'{name}_') for name, id in linear_set.keys()]
-
-            # 
 
             # Evaluate the discontinuity at x = t+
             # TODO: Rewrite so it works for a general reparameterization.
             dvar = target_vars[0]
-            expr_for_dvar = - constant_coefficient(affine_set)
+            print("Affine set: ", affine_set)
+            expr_for_dvar = normalization * constant_coefficient(affine_set)
 
             expr_body_right = expr.body
             expr_body_right = substitute(expr_body_right, discont_bool, false)
-            expr_body_right_tx = transform_expr(expr_body_right, linear_set)
+            expr_body_right_tx = transform_expr(expr_body_right, normalized_set)
             expr_body_right_tx = substitute(expr_body_right_tx, dvar, expr_for_dvar)
 
             # Evaluate the discontinuity at x = t-
             expr_body_left = expr.body
             expr_body_left = substitute(expr_body_left, discont_bool, true)
-            expr_body_left_tx = transform_expr(expr_body_left, linear_set)
+            expr_body_left_tx = transform_expr(expr_body_left, normalized_set)
             expr_body_left_tx = substitute(expr_body_left_tx, dvar, expr_for_dvar)
 
             # if lower < dvar < upper, include the contribution from the discontinuity (x=t+ - x=t-)
-            lower_expr_tx = transform_expr(expr.lower, affine_set)
-            upper_expr_tx = transform_expr(expr.upper, affine_set)
-            dvar_tx = rotate_to_target(affine_set, target_vars = target_vars, target_index = 0)
+            lower_expr_tx = transform_expr(expr.lower, normalized_set)
+            upper_expr_tx = transform_expr(expr.upper, normalized_set)
+            dvar_tx = rotate_to_source(normalized_set, source_index = 0, target_vars = target_vars)
 
             discontinuity_happens = (lower_expr_tx < dvar_tx) & (dvar_tx < upper_expr_tx)
+            discontinuity_happens = substitute(discontinuity_happens, dvar, expr_for_dvar)
             moving_var_delta = IfElse(discontinuity_happens, expr_body_left_tx - expr_body_right_tx, Const(0))
 
             # Build a remapping.
             remapped_delta = TegRemap(moving_var_delta, 
                                     map = dict(zip(var_list(linear_set), target_vars)),
                                     exprs = dict([
-                                                (var, rotate_to_target(linear_set, 
-                                                            target_vars = target_vars,
-                                                            target_index = idx))
-                                            for idx, var in enumerate(target_vars)]),
+                                                (var, substitute(rotate_to_source(normalized_set, 
+                                                            source_index = idx,
+                                                            target_vars = target_vars), dvar, expr_for_dvar))
+                                            for idx, var in enumerate(source_vars)]),
                                     upper_bounds = dict([
-                                                (var, bounds_of(affine_set, 
+                                                (var, bounds_of(normalized_set, 
                                                             target_index = idx)[1])
-                                            for idx, var in enumerate(target_vars)]),
+                                            for idx, var in enumerate(target_vars[1:])]),
                                     lower_bounds = dict([
-                                                (var, bounds_of(affine_set, 
+                                                (var, bounds_of(normalized_set, 
                                                             target_index = idx)[0])
-                                            for idx, var in enumerate(target_vars)])
+                                            for idx, var in enumerate(target_vars[1:])])
                                 )
-            
 
-            moving_var_data.append((remapped_delta, dvar_tx))
+            # TODO: There needs to be a better way to do this..
+            # The better way is to represent point derivative as a distance from non-linearity model.
+            moving_var_data.append(
+                (
+                    remapped_delta, 
+                    rotate_to_target( normalized_set, target_index = 0 ) + expr_for_dvar# D(x' + c = 0)
+                )
+            )
 
     return moving_var_data
 
@@ -471,6 +525,12 @@ def fwd_deriv_transform(expr: ITeg,
             expr = var
         else:
             expr = Const(0)
+    
+    elif isinstance(expr, SmoothFunc):
+        # NOTE: No expressions with the name "d{expr.name}" are allowed
+        in_deriv_expr, ctx, not_ctx = fwd_deriv_transform(expr.expr, ctx, not_ctx)
+        deriv_expr = expr.fwd_deriv(in_deriv_expr = in_deriv_expr)
+        expr = deriv_expr
 
     elif isinstance(expr, Add):
         def union(out1, out2):
@@ -511,6 +571,7 @@ def fwd_deriv_transform(expr: ITeg,
         moving_var_data = rotated_delta_contribution(expr, not_ctx)
         delta_val = Const(0)
         for (moving_var_delta, expr_for_dvar) in moving_var_data:
+            print(f"Delta: {moving_var_delta}, \n Point-Deriv: {expr_for_dvar} \n")
             deriv_expr, ctx, not_ctx = fwd_deriv_transform(expr_for_dvar, ctx, not_ctx)
             delta_val += deriv_expr * moving_var_delta
 
@@ -564,7 +625,8 @@ def fwd_deriv_transform(expr: ITeg,
 
 
 def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]]) -> ITeg:
-    """Computes the fwd_derivative of a given expression.
+    """
+    Computes the fwd_derivative of a given expression.
 
     Args:
         expr: The expression to compute the total fwd_derivative of.
@@ -578,11 +640,12 @@ def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]]) -> ITeg:
     # After fwd_deriv_transform, expr will have unbound infinitesimals
     expr, ctx, not_ctx = fwd_deriv_transform(expr, {}, set())
 
+    print(f"Main-expr: {expr}")
     # Resolve all TegRemap expressions by lifting expressions 
     # out of the tree.
     while is_remappable(expr):
         expr = remap(expr)
-
+        break
 
     assert binding_map.keys() == ctx.keys(), (f'You provided bindings for "{set(binding_map.keys())}" '
                                               f'but bindings were produced for "{set(ctx.keys())}"')
