@@ -40,10 +40,11 @@ def substitute(expr: ITeg, this_expr: ITeg, that_expr: ITeg) -> ITeg:
 
     elif isinstance(expr, TegRemap):
         return TegRemap(
+                        map = expr.map,
                         expr = substitute(expr.expr, this_expr, that_expr),
-                        exprs = [substitute(e, this_expr, that_expr) for e in expr.exprs],
-                        lower_bounds = [substitute(e, this_expr, that_expr) for e in expr.lower_bounds],
-                        upper_bounds = [substitute(e, this_expr, that_expr) for e in expr.upper_bounds]
+                        exprs = dict([(var, substitute(e, this_expr, that_expr)) for var, e in expr.exprs.items()]),
+                        lower_bounds = dict([(var, substitute(e, this_expr, that_expr)) for var, e in expr.lower_bounds.items()]),
+                        upper_bounds = dict([(var, substitute(e, this_expr, that_expr)) for var, e in expr.upper_bounds.items()])
                     )
 
     elif isinstance(expr, Add):

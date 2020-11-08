@@ -42,8 +42,18 @@ from integrable_program import (
 
 from substitute import substitute
 
+
 def is_remappable(expr: ITeg):
     return remap_gather(expr)[0] is not None
+
+
+def resolve_placeholders(expr: ITeg,
+                         map: Dict[str, ITeg]):
+    """ Substitute placeholders for their expressions """
+    for key, p_expr in map.items():
+        expr = substitute(expr, Placeholder(signature=key), p_expr)
+
+    return expr
 
 def remap(expr: ITeg):
     """
@@ -71,19 +81,31 @@ def remap(expr: ITeg):
     expr = substitute(expr, remap_expr, Const(0))
 
     # Do variable substitutions.
-    for var, expr in remap_expr.exprs.items():
-        print(f"Eliminating: {var} with {expr}")
-        remapped_tree = substitute(remapped_tree, TegVar(uid=var[1], name=var[0]), expr)
+    for r_var, r_expr in remap_expr.exprs.items():
+        print(f"Eliminating: {r_var} with {r_expr}")
+        remapped_tree = substitute(remapped_tree, TegVar(uid=r_var[1], name=r_var[0]), r_expr)
 
     # Add integral operators for the new variables back to the top.
     new_expr = remapped_tree
     for integral in teg_list:
         dvar, lexpr, uexpr = integral
-        new_expr = Teg(new_expr, dvar, lexpr, uexpr)
+        new_expr = Teg(lexpr, uexpr, new_expr, dvar)
+
+    # Resolve any placeholders due to Teg bounds.
+    for tegvar, lower, upper in remap_expr.source_bounds:
+        new_expr = resolve_placeholders(new_expr, 
+                        {
+                            f'{tegvar.uid}_ub':upper, 
+                            f'{tegvar.uid}_lb':lower
+                        }
+                )
+
+    print('Interior-only: ', expr)
+    print('Remap-only: ', new_expr)
 
     expr = expr + new_expr
 
-    print(expr)
+    print('Full-tree: ', expr)
 
     return expr
 
@@ -103,17 +125,19 @@ def remap_gather(expr: ITeg):
             return None, None, []
 
         # Lookup remapped variable.
-        if (expr.dvar.name, expr.dvar.id) not in remap_expr.map:
-            remapped_tree = Teg(remapped_tree, expr.dvar, expr.lower, expr.upper) # TODO: Double check positions
+        if (expr.dvar.name, expr.dvar.uid) not in remap_expr.map:
+            remapped_tree = Teg(expr.lower, expr.upper, remapped_tree, expr.dvar) # TODO: Double check positions
             return remap_expr, remapped_tree, teg_list
         else:
-            new_name, new_id = remap_expr.map[(expr.dvar.name, expr.name.id)]
-
-            lexpr = remap_expr.lower_bounds[(new_name, new_id)]
-            uexpr = remap_expr.upper_bounds[(new_name, new_id)]
+            print("map: ", remap_expr.map)
+            new_name, new_id = remap_expr.map[(expr.dvar.name, expr.dvar.uid)]
+            print("lower_bounds: ", list(remap_expr.lower_bounds.items()))
+            print("upper_bounds: ", list(remap_expr.upper_bounds.items()))
+            lexpr = remap_expr.lower_bounds.get((new_name, new_id))
+            uexpr = remap_expr.upper_bounds.get((new_name, new_id))
 
             new_dvar = TegVar(name = new_name, uid = new_id)
-            #remapped_tree = Teg(remapped_tree, new_dvar, lexpr, uexpr)
+            # remapped_tree = Teg(remapped_tree, new_dvar, lexpr, uexpr)
 
             # Add bounds check. This will be transformed later in the process.
             bounds_check = (expr.lower < expr.dvar) & (expr.upper > expr.dvar)
@@ -152,7 +176,7 @@ def remap_gather(expr: ITeg):
                     teg_list)
 
         return None, None, []
-    
+
     elif isinstance(expr, Invert):
         remap_expr, remapped_tree, teg_list = remap_gather(expr.child)
 

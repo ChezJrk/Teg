@@ -41,7 +41,6 @@ class TegOverloads:
         return self + (-try_making_teg_const(other))
 
     def __mul__(self, other):
-        assert isinstance(other, ITeg), f'Attempted to multiply a non-ITeg {other} with an ITeg expression'
         return Mul([self, try_making_teg_const(other)])
 
     def __truediv__(self, other):
@@ -51,7 +50,6 @@ class TegOverloads:
         return try_making_teg_const(other) + self
 
     def __rmul__(self, other):
-        assert isinstance(other, ITeg), f'Attempted to multiply a non-ITeg {other} with an ITeg expression'
         return try_making_teg_const(other) * self
 
     def __rtruediv__(self, other):
@@ -137,7 +135,7 @@ class TegTegVariableOverloads:
 
     def __repr__(self):
         value = '' if self.value is None else f', value={self.value}'
-        return f'TegVar(name={self.name}{value})'
+        return f'TegVar(name={self.name}{value}, uid={self.uid})'
 
 
 @overloads(Placeholder)
@@ -145,10 +143,10 @@ class TegPlaceholderOverloads:
 
     def __eq__(self, other):
         return (type(self) == type(other)
-                and self.signature == self.signature)
+                and self.signature == other.signature)
 
     def __str__(self):
-        return f"{self.name}"
+        return f"{self.signature}"
 
     def __repr__(self):
         return f'Placeholder(name={self.name}, signature={self.signature})'
@@ -158,7 +156,7 @@ class TegPlaceholderOverloads:
 class TegConstantOverloads:
 
     def __str__(self):
-        return f'{"" if not self.name else f"{self.name}="}{self.value}'
+        return f'{"" if not self.name else f"{self.name}="}{self.value:1.3f}'
 
     def __repr__(self):
         name = '' if self.name == '' else f', name={self.name}'

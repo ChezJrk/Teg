@@ -16,9 +16,30 @@ from integrable_program import (
 )
 from evaluate import evaluate
 from derivs import FwdDeriv, RevDeriv
+from fwd_deriv import fwd_deriv
 import operator_overloads  # noqa: F401
 from simplify import simplify
+from remap import remap_gather
 
+# TODO: move to test utils later.
+def finite_difference(expr, var, delta = 0.01, num_samples = 1000):
+    assert var.value is not None, f'Provide a binding for var in order to compute it'
+    
+    base = var.value
+    # Compute upper and lower values.
+    expr.bind_variable(var, base + delta)
+    plus_delta = evaluate(expr, ignore_cache = True, num_samples = num_samples)
+    print('Value at base + delta', plus_delta)
+
+    expr.bind_variable(var, base - delta)
+    minus_delta = evaluate(expr, ignore_cache = True, num_samples = num_samples)
+    print('Value at base - delta', minus_delta)
+
+    # Reset value.
+    expr.bind_variable(var, base)
+
+    gradient = (plus_delta - minus_delta) / (2 * delta)
+    return gradient
 
 def check_nested_lists(self, results, expected, places=7):
     for res, exp in zip(results, expected):
@@ -29,7 +50,6 @@ def check_nested_lists(self, results, expected, places=7):
             err = f'Result {res} of type {type(res)} and expected {exp} of type {type(exp)}'
             assert isinstance(res, t) and isinstance(exp, t), err
             self.assertAlmostEqual(res, exp, places)
-
 
 class TestArithmetic(TestCase):
 
@@ -744,22 +764,23 @@ class AffineConditionsTest(TestCase):
         #self.assertAlmostEqual(evaluate(deriv_integral), -2)
 
         deriv_integral = FwdDeriv(integral, [(t, 1)])
-        self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), -2)
+        print("Simplified: ", simplify(deriv_integral.deriv_expr))
+        self.assertAlmostEqual(evaluate(deriv_integral.deriv_expr, ignore_cache=True), -2)
 
     def test_affine_condition_with_constants(self):
-        x, t = Var('x'), Var('t', 7/4)
+        x, t = TegVar('x'), Var('t', 7/4)
         cond = IfElse(x + Const(2) * t - Const(4) < 0, self.zero, self.one)
         integral = Teg(self.zero, self.one, cond, x)
 
-        deriv_integral = RevDeriv(integral, Tup(Const(1)))
-        self.assertAlmostEqual(evaluate(deriv_integral), 2)
+        #deriv_integral = RevDeriv(integral, Tup(Const(1)))
+        #self.assertAlmostEqual(evaluate(deriv_integral), 2)
 
         deriv_integral = FwdDeriv(integral, [(t, 1)])
         self.assertAlmostEqual(evaluate(deriv_integral, ignore_cache=True), 2)
 
     def test_affine_condition_multivariable(self):
         # \int_{x = [0, 1]} (x - 2 * t1 + 3 * t2 ? 0 : 1)
-        x, t1, t2 = Var('x'), Var('t1', 3/4), Var('t2', 1/3)
+        x, t1, t2 = TegVar('x'), Var('t1', 3/4), Var('t2', 1/3)
         cond = IfElse(x - Const(2) * t1 + Const(3) * t2 < 0, self.zero, self.one)
         integral = Teg(self.zero, self.one, cond, x)
 
@@ -773,24 +794,53 @@ class AffineConditionsTest(TestCase):
         self.assertEqual(evaluate(deriv_integral, ignore_cache=True), 3)
 
     def test_affine_condition_multivariable_multiintegral(self):
-        x, y = Var('x'), Var('y')
-        t1, t2 = Var('t1', 1/4), Var('t2', 1)
-        cond = IfElse(x - y + Const(2) * t1 + Const(3) * t2 + Const(-3) < 0, self.one, self.zero)
+        x, y = TegVar('x'), TegVar('y')
+        t1, t2 = Var('t1', 0.25), Var('t2', 1)
+        cond = IfElse((x - Const(0.2) * y) - (Const(2) * t1 + Const(3) * t2 + Const(-3)) < 0, self.one, self.zero)
         body = Teg(self.zero, self.one, cond, y)
         integral = Teg(self.zero, self.one, body, x)
         # int_{x=[0, 1]}
         #     int_{y=[0, 1]}
         #         ((x - y + 2 * t1=0.25 + 3 * t2=1 - 3 < 0) ? 1 : 0)
 
-        deriv_integral = RevDeriv(integral, Tup(Const(1)))
-        check_nested_lists(self, evaluate(simplify(deriv_integral)), [1, 1.5])
+        #deriv_integral = RevDeriv(integral, Tup(Const(1)))
+        #check_nested_lists(self, evaluate(simplify(deriv_integral)), [1, 1.5])
 
         deriv_integral = FwdDeriv(integral, [(t1, 1), (t2, 0)])
-        self.assertAlmostEqual(evaluate(simplify(deriv_integral)), 1)
+        sd = simplify(deriv_integral.deriv_expr)
+
+        self.assertAlmostEqual( evaluate(sd, num_samples = 5000),
+                                finite_difference(integral, t1),
+                                places = 2 )
 
         deriv_integral = FwdDeriv(integral, [(t1, 0), (t2, 1)])
-        self.assertAlmostEqual(evaluate(simplify(deriv_integral)), 1.5)
+        self.assertAlmostEqual( evaluate(simplify(deriv_integral), num_samples = 5000),
+                                finite_difference(integral, t2),
+                                places = 2 )
 
+    def test_affine_condition_multivariable_multiintegral_parametric(self):
+        x, y = TegVar('x'), TegVar('y')
+        t1, t2 = Var('t1', 1), Var('t2', 0)
+        cond = IfElse((t2 * x - t1 * y) + 0.5 < 0, self.one, self.zero)
+        body = Teg(self.zero, self.one, cond, y)
+        integral = Teg(self.zero, self.one, body, x)
+
+        deriv_integral = FwdDeriv(integral, [(t1, 1), (t2, 0)])
+        sd = simplify(deriv_integral.deriv_expr)
+        fd = finite_difference(integral, t1)
+
+        self.assertAlmostEqual(evaluate(sd, num_samples = 5000), fd, places = 2)
+
+        #deriv_integral = FwdDeriv(integral, [(t1, 0), (t2, 1)])
+        #self.assertAlmostEqual(evaluate(simplify(deriv_integral)), 1.5)
+
+        """
+        expr, full_expr = fwd_deriv(integral, [(t1, 1), (t2, 0)])
+        remap_expr, tree, _ = remap_gather(full_expr)
+
+        for var, transform in remap_expr.exprs.items():
+            print(f'{var} -> {simplify(transform)}')
+        """
 
 
 if __name__ == '__main__':

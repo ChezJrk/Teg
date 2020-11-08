@@ -32,7 +32,7 @@ class Sqrt(SmoothFunc):
         y = sqrt(x)
         TODO: Do we need bounds checks?
     """
-    def __init__(self, expr:ITeg, name:str = "Sqrt"):
+    def __init__(self, expr: ITeg, name:str = "Sqrt"):
         super(Sqrt, self).__init__(expr = expr, name = name)
 
     def fwd_deriv(self, in_deriv_expr: ITeg):
@@ -43,7 +43,6 @@ class Sqrt(SmoothFunc):
 
     def operation(self, in_value):
         return np.sqrt(in_value)
-
 
 
 class Sqr(SmoothFunc):

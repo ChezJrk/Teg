@@ -42,6 +42,10 @@ def reverse_deriv_transform(expr: ITeg,
         child = expr.child
         yield from reverse_deriv_transform(child, -out_deriv_vals * expr * expr, not_ctx)
 
+    elif isinstance(expr, SmoothFunc):
+        child = expr.expr
+        yield from reverse_deriv_transform(child, expr.reverse_deriv(out_deriv_expr = out_deriv_vals), not_ctx)
+
     elif isinstance(expr, IfElse):
         derivs_if = reverse_deriv_transform(expr.if_body, Const(1), not_ctx)
         derivs_else = reverse_deriv_transform(expr.else_body, Const(1), not_ctx)
@@ -52,6 +56,8 @@ def reverse_deriv_transform(expr: ITeg,
 
     elif isinstance(expr, Teg):
         not_ctx.discard((expr.dvar.name, expr.dvar.uid))
+        moving_var_data = delta_contribution(expr, not_ctx)
+
         moving_var_data = delta_contribution(expr, not_ctx)
         yield from ((name_uid, out_deriv_vals * delta_val * deriv_expr)
                     for delta_val, expr_for_dvar in moving_var_data

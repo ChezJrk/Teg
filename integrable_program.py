@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Set, Dict, Any, Tuple
 import operator
 import numpy as np
 
@@ -104,11 +104,13 @@ class TegRemap(ITeg):
                        exprs: Dict[Tuple[str, int], ITeg],
                        upper_bounds: Dict[Tuple[str, int], ITeg],
                        lower_bounds: Dict[Tuple[str, int], ITeg], 
+                       source_bounds: Set[Tuple[TegVar, ITeg, ITeg]],
                        name: str = 'TegRemap'):
         super(TegRemap, self).__init__(children = [expr])
         self.map = map
         self.upper_bounds = upper_bounds
         self.lower_bounds = lower_bounds
+        self.source_bounds = source_bounds
         self.expr = expr
         self.exprs = exprs
         self.operation = None # Cannot eval.
@@ -137,6 +139,7 @@ class Teg(ITeg):
     def __init__(self, lower: Var, upper: Var, body: ITeg, dvar: TegVar):
         super(Teg, self).__init__(children=[try_making_teg_const(e) for e in (lower, upper, body)])
         self.lower, self.upper, self.body = self.children
+        assert isinstance(dvar, TegVar), f'Can only integrate over TegVar variables. {dvar} is not a TegVar'
         self.dvar = dvar
 
 
