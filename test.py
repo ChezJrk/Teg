@@ -14,15 +14,100 @@ from integrable_program import (
     Tup,
     LetIn,
 )
-from evaluate import evaluate
+from evaluate import evaluate as evaluate_numpy
 from derivs import FwdDeriv, RevDeriv
 from fwd_deriv import fwd_deriv
 import operator_overloads  # noqa: F401
 from simplify import simplify
 from remap import remap_gather
+from compile import emit
+import subprocess
+import time
+
+def runProgram(program, silent = False):
+    prog_name, out_size = program
+    proc = subprocess.Popen([prog_name], stdout=subprocess.PIPE, shell=True)
+    (out, err) = proc.communicate()
+
+    if err is not None:
+        print(f"Error: {err}")
+        print(f"Output: {out}")
+
+    if out_size > 1:
+        return [ float(line) for line in out.decode().split('\n')[:out_size] ]
+    else:
+        return float(out)
+
+def compileProgram(program, silent=True):
+    fn_name, arglist, code, out_size = (program.name, program.arglist, program.code, program.size)
+
+    for arg in arglist:
+        assert arg.default is not None, f'Var {arg.name} does not have a default value. Such programs are not currently supported'
+
+    # Build dummy main function
+    if out_size == 1:
+        main_code = f' \n' +\
+                f'int main(int argc, char** argv){{\n' +\
+                f'  std::cout << {fn_name}();\n' +\
+                f'  return 0;\n' +\
+                f'}}'
+    else:
+        main_code = f' \n' +\
+                f'int main(int argc, char** argv){{\n' +\
+                f'  {fn_name}_result s = {fn_name}();\n' +\
+                f'  for(int i = 0; i < {out_size}; i++){{' +\
+                f'      std::cout << s.o[i] << std::endl;\n' +\
+                f'  }}' +\
+                f'  return 0;\n' + \
+                f'}}'
+    
+
+    # Include basic IO
+    header_code = "#include <iostream>\n" + "#include <math.h>\n"
+
+    all_code = header_code + code + main_code
+    cppfile = open("/tmp/_teg_cpp_out.cpp", "w")
+    cppfile.write(all_code)
+    cppfile.close()
+
+    proc = subprocess.Popen("g++ /tmp/_teg_cpp_out.cpp -o /tmp/_teg_cpp_out -O3", stdout=subprocess.PIPE, shell=True)
+    (out, err) = proc.communicate()
+
+    if err is not None:
+        print(f"Error: {err}")
+        print(f"Output: {out}")
+
+    return "/tmp/_teg_cpp_out", out_size
+
+
+def evaluate_c(expr: ITeg, num_samples = 100, ignore_cache = False, silent = True):
+    pcount_before = time.perf_counter()
+    c_code = emit(expr, target = 'C', num_samples = num_samples)
+    pcount_after = time.perf_counter()
+    print(f'Teg-to-C emit time: {pcount_after - pcount_before:.3f}s')
+
+    pcount_before = time.perf_counter()
+    binary = compileProgram(c_code)
+    pcount_after = time.perf_counter()
+    print(f'C compile time:     {pcount_after - pcount_before:.3f}s')
+
+    pcount_before = time.perf_counter()
+    value = runProgram(binary)
+    pcount_after = time.perf_counter()
+    print(f'C exec time:        {pcount_after - pcount_before:.3f}s')
+
+    return value
+
+
+FAST_EVAL = True
+def evaluate(*args, **kwargs):
+    if FAST_EVAL:
+        return evaluate_c(*args, **kwargs)
+    else:
+        return evaluate_numpy(*args, **kwargs)
 
 # TODO: move to test utils later.
-def finite_difference(expr, var, delta = 0.01, num_samples = 1000):
+def finite_difference(expr, var, delta = 0.01, num_samples = 10000):
     assert var.value is not None, f'Provide a binding for var in order to compute it'
     
     base = var.value
@@ -796,26 +881,34 @@ class AffineConditionsTest(TestCase):
     def test_affine_condition_multivariable_multiintegral(self):
         x, y = TegVar('x'), TegVar('y')
         t1, t2 = Var('t1', 0.25), Var('t2', 1)
-        cond = IfElse((x - Const(0.2) * y) - (Const(2) * t1 + Const(3) * t2 + Const(-3)) < 0, self.one, self.zero)
+        cond = IfElse((x - y) + (Const(2) * t1 + Const(3) * t2 + Const(-3)) < 0, self.one, self.zero)
         body = Teg(self.zero, self.one, cond, y)
         integral = Teg(self.zero, self.one, body, x)
         # int_{x=[0, 1]}
         #     int_{y=[0, 1]}
         #         ((x - y + 2 * t1=0.25 + 3 * t2=1 - 3 < 0) ? 1 : 0)
 
-        #deriv_integral = RevDeriv(integral, Tup(Const(1)))
-        #check_nested_lists(self, evaluate(simplify(deriv_integral)), [1, 1.5])
+        d_t1 = finite_difference(integral, t1)
+        d_t2 = finite_difference(integral, t2)
+        #d_t1 = 0.5
+        #d_t2 = -0.5
+
+        deriv_integral = RevDeriv(integral, Tup(Const(1)))
+        #print("Simplified:")
+        #print(simplify(deriv_integral.deriv_expr))
+        check_nested_lists(self, evaluate(simplify(deriv_integral), num_samples = 5000),
+                        [d_t1, d_t2], places = 2)
 
         deriv_integral = FwdDeriv(integral, [(t1, 1), (t2, 0)])
         sd = simplify(deriv_integral.deriv_expr)
 
         self.assertAlmostEqual( evaluate(sd, num_samples = 5000),
-                                finite_difference(integral, t1),
+                                d_t1,
                                 places = 2 )
 
         deriv_integral = FwdDeriv(integral, [(t1, 0), (t2, 1)])
         self.assertAlmostEqual( evaluate(simplify(deriv_integral), num_samples = 5000),
-                                finite_difference(integral, t2),
+                                d_t2,
                                 places = 2 )
 
     def test_affine_condition_multivariable_multiintegral_parametric(self):

@@ -11,6 +11,7 @@ from integrable_program import (
     SmoothFunc,
     IfElse,
     Teg,
+    TegRemap,
     Tup,
     LetIn,
     Or,
@@ -189,5 +190,15 @@ def simplify(expr: ITeg) -> ITeg:
             return Const(evaluate(Or(simple1, simple2)))
         return Or(left_expr, right_expr)
 
+    elif isinstance(expr, TegRemap):
+        return TegRemap(
+                        map = expr.map,
+                        expr = simplify(expr.expr),
+                        exprs = dict([(var, simplify(e)) for var, e in expr.exprs.items()]),
+                        lower_bounds = dict([(var, simplify(e)) for var, e in expr.lower_bounds.items()]),
+                        upper_bounds = dict([(var, simplify(e)) for var, e in expr.upper_bounds.items()]),
+                        source_bounds = expr.source_bounds
+                    )
+
     else:
-        raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported fwd_derivative.')
+        raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported simplify rule')

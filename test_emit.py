@@ -69,7 +69,7 @@ def compileProgram(program):
     
 
     # Include basic IO
-    header_code = "#include <iostream>\n"
+    header_code = "#include <iostream>\n #include <math>\n"
 
     all_code = header_code + code + main_code
     cppfile = open("/tmp/_teg_cpp_out.cpp", "w")

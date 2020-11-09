@@ -36,10 +36,10 @@ class Sqrt(SmoothFunc):
         super(Sqrt, self).__init__(expr = expr, name = name)
 
     def fwd_deriv(self, in_deriv_expr: ITeg):
-        return Const(2) * Sqrt(self.expr) * in_deriv_expr
+        return Invert(Const(2) * Sqrt(self.expr)) * in_deriv_expr
 
     def rev_deriv(self, out_deriv_expr: ITeg):
-        return out_deriv_expr * Const(2) * Sqrt(self.expr)
+        return out_deriv_expr * Invert(Const(2) * Sqrt(self.expr))
 
     def operation(self, in_value):
         return np.sqrt(in_value)

@@ -62,19 +62,16 @@ def remap(expr: ITeg):
         of the tree and applying variable rewrites to them.
     """
 
-    print(expr)
-    print("Remapping...")
-
     # Extract remap tree and lift integrals out.
     remap_expr, remapped_tree, teg_list = remap_gather(expr)
     if remap_expr is None:
         return expr
 
-    print("Remap expr: ")
-    print(remap_expr)
+    #print("Remap expr: ")
+    #print(remap_expr)
 
-    print("Remapped tree: ")
-    print(remapped_tree)
+    #print("Remapped tree: ")
+    #print(remapped_tree)
 
     assert is_remappable(remapped_tree) == False, f'Remapped expression is not a linear subtree in the provided tree'
 
@@ -82,7 +79,6 @@ def remap(expr: ITeg):
 
     # Do variable substitutions.
     for r_var, r_expr in remap_expr.exprs.items():
-        print(f"Eliminating: {r_var} with {r_expr}")
         remapped_tree = substitute(remapped_tree, TegVar(uid=r_var[1], name=r_var[0]), r_expr)
 
     # Add integral operators for the new variables back to the top.
@@ -100,12 +96,12 @@ def remap(expr: ITeg):
                         }
                 )
 
-    print('Interior-only: ', expr)
-    print('Remap-only: ', new_expr)
+    #print('Interior-only: ', expr)
+    #print('Remap-only: ', new_expr)
 
     expr = expr + new_expr
 
-    print('Full-tree: ', expr)
+    #print('Full-tree: ', expr)
 
     return expr
 
@@ -129,10 +125,7 @@ def remap_gather(expr: ITeg):
             remapped_tree = Teg(expr.lower, expr.upper, remapped_tree, expr.dvar) # TODO: Double check positions
             return remap_expr, remapped_tree, teg_list
         else:
-            print("map: ", remap_expr.map)
             new_name, new_id = remap_expr.map[(expr.dvar.name, expr.dvar.uid)]
-            print("lower_bounds: ", list(remap_expr.lower_bounds.items()))
-            print("upper_bounds: ", list(remap_expr.upper_bounds.items()))
             lexpr = remap_expr.lower_bounds.get((new_name, new_id))
             uexpr = remap_expr.upper_bounds.get((new_name, new_id))
 
