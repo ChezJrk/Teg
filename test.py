@@ -99,7 +99,7 @@ def evaluate_c(expr: ITeg, num_samples = 100, ignore_cache = False, silent = Tru
     return value
 
 
-FAST_EVAL = True
+FAST_EVAL = False
 def evaluate(*args, **kwargs):
     if FAST_EVAL:
         return evaluate_c(*args, **kwargs)
@@ -934,6 +934,29 @@ class AffineConditionsTest(TestCase):
         for var, transform in remap_expr.exprs.items():
             print(f'{var} -> {simplify(transform)}')
         """
+
+    def test_multi_affine_condition_multivariable_multiintegral_parametric(self):
+        x, y = TegVar('x'), TegVar('y')
+        t1, t2 = Var('t1', 1), Var('t2', 0)
+        cond1 = IfElse((t2 * x - t1 * y) + 0.5 < 0, self.one, self.zero)
+        t3, t4 = Var('t3', 0), Var('t4', 1)
+        cond2 = IfElse((t3 * x + t4 * y) - 0.5 < 0, self.one, self.zero)
+
+        body = Teg(self.zero, self.one, cond1 * cond2, y)
+        integral = Teg(self.zero, self.one, body, x)
+
+        """
+        d_t1 = finite_difference(integral, t1)
+        d_t2 = finite_difference(integral, t2)
+        d_t3 = finite_difference(integral, t3)
+        d_t4 = finite_difference(integral, t4)
+        """
+        d_t1 = d_t2 = d_t3 = d_t4 = -0.25
+
+        print([d_t1, d_t2, d_t3, d_t4])
+        deriv_integral = RevDeriv(integral, Tup(Const(1)))
+        check_nested_lists(self, evaluate(simplify(deriv_integral), num_samples = 5000),
+                        [d_t1, d_t2, d_t3, d_t4], places = 2)
 
 
 if __name__ == '__main__':
