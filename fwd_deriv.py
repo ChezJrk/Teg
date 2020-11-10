@@ -489,7 +489,7 @@ def rotated_delta_contribution(expr: Teg,
             distance_to_delta = IfElse(flip_condition, -distance_to_delta, distance_to_delta)
 
             # Build a remapping function.
-            remapping = lambda x: TegRemap( x, 
+            remapping = partial(TegRemap, 
                                     map = dict(zip( [(v.name, v.uid) for v in source_vars], 
                                                     [(v.name, v.uid) for v in target_vars])),
                                     exprs = rotated_exprs,
@@ -670,6 +670,7 @@ def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]]) -> ITeg:
     expr = full_expr
     while is_remappable(expr):
         expr = remap(expr)
+
 
     assert binding_map.keys() == ctx.keys(), (f'You provided bindings for "{set(binding_map.keys())}" '
                                               f'but bindings were produced for "{set(ctx.keys())}"')

@@ -11,6 +11,7 @@ from integrable_program import (
     Mul,
     IfElse,
     Teg,
+    TegRemap,
     TegVar,
     Tup,
     LetIn,
@@ -132,6 +133,17 @@ class TegTegVariableOverloads:
     def __str__(self):
         value = '' if self.value is None else f'={self.value}'
         return f"{self.name}({self.uid}){value}"
+
+    def __repr__(self):
+        value = '' if self.value is None else f', value={self.value}'
+        return f'TegVar(name={self.name}{value}, uid={self.uid})'
+
+@overloads(TegRemap)
+class TegRemapOverloads:
+
+    def __str__(self):
+        mapping = "".join([f"{key} -> {value}" for key, value in self.exprs.items()])
+        return f"TegRemap[{mapping}]({self.expr})"
 
     def __repr__(self):
         value = '' if self.value is None else f', value={self.value}'

@@ -132,9 +132,16 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup) -> ITeg:
             partial_deriv_map[name_uid] += e
 
         # Introduce fresh variables for each partial derivative
+        uids =     [var_uid for var_name, var_uid in partial_deriv_map.keys()]
         new_vars = [Var(var_name) for var_name, var_uid in partial_deriv_map.keys()]
         new_vals = [*partial_deriv_map.values()]
         new_vals = [remap_all(e) for e in new_vals]
+
+        sorted_list = list(zip(uids, new_vars, new_vals))
+        sorted_list.sort(key = lambda a:a[0])
+        _, new_vars, new_vals = list(zip(*sorted_list))
+
+        print('Reverse-deriv output order: ', new_vars)
 
         assert len(new_vals) > 0, 'There must be variables to compute derivatives. '
         out_expr = Tup(*new_vars) if len(new_vars) > 1 else new_vars[0]

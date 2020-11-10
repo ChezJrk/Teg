@@ -80,7 +80,7 @@ def compileProgram(program, silent=True):
     return "/tmp/_teg_cpp_out", out_size
 
 
-def evaluate_c(expr: ITeg, num_samples = 100, ignore_cache = False, silent = True):
+def evaluate_c(expr: ITeg, num_samples = 1000, ignore_cache = False, silent = True):
     pcount_before = time.perf_counter()
     c_code = emit(expr, target = 'C', num_samples = num_samples)
     pcount_after = time.perf_counter()
@@ -99,7 +99,7 @@ def evaluate_c(expr: ITeg, num_samples = 100, ignore_cache = False, silent = Tru
     return value
 
 
-FAST_EVAL = False
+FAST_EVAL = True
 def evaluate(*args, **kwargs):
     if FAST_EVAL:
         return evaluate_c(*args, **kwargs)
@@ -107,7 +107,7 @@ def evaluate(*args, **kwargs):
         return evaluate_numpy(*args, **kwargs)
 
 # TODO: move to test utils later.
-def finite_difference(expr, var, delta = 0.01, num_samples = 10000):
+def finite_difference(expr, var, delta = 0.005, num_samples = 10000):
     assert var.value is not None, f'Provide a binding for var in order to compute it'
     
     base = var.value
@@ -937,21 +937,31 @@ class AffineConditionsTest(TestCase):
 
     def test_multi_affine_condition_multivariable_multiintegral_parametric(self):
         x, y = TegVar('x'), TegVar('y')
-        t1, t2 = Var('t1', 1), Var('t2', 0)
-        cond1 = IfElse((t2 * x - t1 * y) + 0.5 < 0, self.one, self.zero)
-        t3, t4 = Var('t3', 0), Var('t4', 1)
-        cond2 = IfElse((t3 * x + t4 * y) - 0.5 < 0, self.one, self.zero)
+        t1, t2 = Var('t1', 1), Var('t2', 1)
+        cond1 = IfElse((t2 * x - t1 * y) < 0, self.one, self.zero)
+        #cond1 = IfElse((x - y) + (Const(0.5) * t1 - Const(0.5) * t2) < 0, self.one, self.zero)
+        t3, t4 = Var('t3', 1), Var('t4', 1)
+        cond2 = IfElse((t3 * x + t4 * y) - 1 < 0, self.one, self.zero)
+        #cond2 = IfElse((x + y) + (Const(0.5) * t3 - Const(0.5) * t4) < 0, self.one, self.zero)
 
         body = Teg(self.zero, self.one, cond1 * cond2, y)
         integral = Teg(self.zero, self.one, body, x)
 
-        """
+
         d_t1 = finite_difference(integral, t1)
         d_t2 = finite_difference(integral, t2)
         d_t3 = finite_difference(integral, t3)
         d_t4 = finite_difference(integral, t4)
-        """
-        d_t1 = d_t2 = d_t3 = d_t4 = -0.25
+
+        #print([d_t1, d_t2, d_t3, d_t4])
+
+        deriv_integral = FwdDeriv(integral, [(t1, 1), (t2, 0), (t3, 0), (t4, 0)])
+        sd = simplify(deriv_integral.deriv_expr)
+        #print(f"Simplified: {sd}")
+        fd = finite_difference(integral, t1)
+        #fd = -0.25
+
+        self.assertAlmostEqual(evaluate(sd, num_samples = 5000), fd, places = 2)
 
         print([d_t1, d_t2, d_t3, d_t4])
         deriv_integral = RevDeriv(integral, Tup(Const(1)))
