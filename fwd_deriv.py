@@ -160,11 +160,13 @@ def affine_to_linear(affine_set: Dict[Tuple[str, int], ITeg]):
     return linear_set
 
 def normalize_linear_set(linear_set: Dict[Tuple[str, int], ITeg]):
-    normalization = Sqrt(reduce(operator.add, [Sqr(expr) for var, expr in linear_set.items()]))
+    #normalization = Sqrt(reduce(operator.add, [Sqr(expr) for var, expr in linear_set.items()]))
+    normalization_var = Var('__norm__')
+    normalization_expr = Invert(Sqrt(reduce(operator.add, [Sqr(expr) for var, expr in linear_set.items()])))
 
-    normalized_set = dict([ (var, expr * Invert(normalization)) for var, expr in linear_set.items() ])
+    normalized_set = dict([ (var, expr * normalization_var) for var, expr in linear_set.items() ])
 
-    return normalized_set, normalization
+    return normalized_set, normalization_var, normalization_expr
 
 def negate_degenerate_coeffs(affine_set: Dict[Tuple[str, int], ITeg], source_vars: List[TegVar]):
     """
@@ -444,16 +446,17 @@ def rotated_delta_contribution(expr: Teg,
 
             affine_set, flip_condition = negate_degenerate_coeffs(raw_affine_set, source_vars)
             linear_set = affine_to_linear(affine_set)
-            normalized_set, normalization = normalize_linear_set(linear_set)
+            normalized_set, normalization_var, normalization_expr = normalize_linear_set(linear_set)
 
             num_tegvars = len(linear_set)
 
             # Evaluate the discontinuity at x = t+
             # TODO: Rewrite so it works for a general reparameterization.
             dvar = target_vars[0]
-            expr_for_dvar = - constant_coefficient(affine_set) / normalization
+            #expr_for_dvar = - constant_coefficient(affine_set) / normalization
+            expr_for_dvar = - constant_coefficient(affine_set) * normalization_var
 
-             # Computed rotated expressions.
+            # Computed rotated expressions.
             rotated_exprs = dict([((var.name, var.uid), substitute(rotate_to_source(normalized_set, 
                                         source_index = idx,
                                         target_vars = target_vars,
@@ -486,13 +489,19 @@ def rotated_delta_contribution(expr: Teg,
                                              target_vars = target_vars,
                                              source_vars = source_vars) - \
                                              expr_for_dvar)
+
+            duplicate_norm_var = Var('__norm_i__')
             distance_to_delta = IfElse(flip_condition, -distance_to_delta, distance_to_delta)
+            distance_to_delta = substitute(distance_to_delta, normalization_var, duplicate_norm_var)
+            distance_to_delta = LetIn([duplicate_norm_var], [normalization_expr], distance_to_delta)
 
             # Build a remapping function.
             remapping = partial(TegRemap, 
                                     map = dict(zip( [(v.name, v.uid) for v in source_vars], 
                                                     [(v.name, v.uid) for v in target_vars])),
-                                    exprs = rotated_exprs,
+                                    exprs = {**rotated_exprs,
+                                        (normalization_var.name, normalization_var.uid): normalization_expr
+                                    }, 
                                     upper_bounds = dict([
                                                 ((var.name, var.uid), bounds_of(normalized_set, 
                                                             target_index = idx,

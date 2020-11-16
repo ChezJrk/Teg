@@ -78,14 +78,28 @@ def remap(expr: ITeg):
     expr = substitute(expr, remap_expr, Const(0))
 
     # Do variable substitutions.
-    for r_var, r_expr in remap_expr.exprs.items():
-        remapped_tree = substitute(remapped_tree, TegVar(uid=r_var[1], name=r_var[0]), r_expr)
+    #for r_var, r_expr in remap_expr.exprs.items():
+    #    remapped_tree = substitute(remapped_tree, TegVar(uid=r_var[1], name=r_var[0]), r_expr)
+
+    # Find normalization if it exists.
+    normalization_map = [ (r_var, r_expr) for r_var, r_expr in remap_expr.exprs.items() if r_var[0] == '__norm__']
+    #if normalization_map:
+    #    remap_expr.exprs.pop(normalization_map[0][0])
+
+    var_list = [ Var(name = name, uid = uid) for (name, uid) in remap_expr.exprs.keys() if name != '__norm__' ]
+    remapped_tree = LetIn(var_list, remap_expr.exprs.values(), remapped_tree)
 
     # Add integral operators for the new variables back to the top.
     new_expr = remapped_tree
     for integral in teg_list:
         dvar, lexpr, uexpr = integral
         new_expr = Teg(lexpr, uexpr, new_expr, dvar)
+
+    if normalization_map:
+        normalization_map = normalization_map[0]
+        norm_var = Var(name = normalization_map[0][0], uid = normalization_map[0][1])
+        norm_expr = normalization_map[1]
+        new_expr = LetIn((norm_var,), (norm_expr,), new_expr)
 
     # Resolve any placeholders due to Teg bounds.
     for tegvar, lower, upper in remap_expr.source_bounds:
@@ -143,7 +157,7 @@ def remap_gather(expr: ITeg):
             remap_expr, remapped_tree, teg_list = remap_gather(child)
             if remap_expr is not None:
                 children = expr.children[:idx] + [remapped_tree] + expr.children[idx + 1:]
-                return remap_expr, LetIn(new_vars = expr.new_vars, new_exprs = children[1:], expr = children[0])
+                return remap_expr, LetIn(new_vars = expr.new_vars, new_exprs = children[1:], expr = children[0]), teg_list
 
         return None, None, []
 

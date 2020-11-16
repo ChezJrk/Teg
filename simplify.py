@@ -23,18 +23,22 @@ from integrable_program import (
 from derivs import FwdDeriv, RevDeriv
 import operator_overloads  # noqa: F401
 from evaluate import evaluate
+from substitute import substitute
 
 def simplify(expr: ITeg) -> ITeg:
 
     if isinstance(expr, Var):
+        #return expr
+        #if hasattr(expr, "value") and expr.value is not None:
+        #    return Const(expr.value)
         return expr
 
     elif isinstance(expr, Add):
         expr1, expr2 = expr.children
         simple1, simple2 = simplify(expr1), simplify(expr2)
-        if isinstance(simple1, Var) and simple1.value == 0:
+        if isinstance(simple1, Const) and simple1.value == 0:
             return simple2
-        if isinstance(simple2, Var) and simple2.value == 0:
+        if isinstance(simple2, Const) and simple2.value == 0:
             return simple1
         if isinstance(simple1, Const) and isinstance(simple2, Const):
             #print(f'Simplify Add: {simple1} + {simple2}')
@@ -49,10 +53,6 @@ def simplify(expr: ITeg) -> ITeg:
 
             const_nodes = [node for node in all_nodes if isinstance(node, Const)]
             other_nodes = [node for node in all_nodes if not isinstance(node, Const)]
-            #print('--Associative Reordering-- ')
-            #print('const_nodes: ', const_nodes)
-            #print('other_nodes: ', other_nodes)
-            #print('all_nodes: ', all_nodes)
 
             # No const nodes -> Reordering is pointless.
             if len(other_nodes) == len(all_nodes):
@@ -60,14 +60,67 @@ def simplify(expr: ITeg) -> ITeg:
 
             # Compress const nodes.
             const_node = Const(evaluate(reduce(operator.add, const_nodes)))
-
+            
             # Re-order to front.
-            simplified_nodes = [const_node,] + other_nodes
-
-            #print('simplified: ', simplified_nodes)
+            if const_node == Const(0):
+                simplified_nodes = other_nodes
+            else:
+                simplified_nodes = other_nodes + [const_node]
 
             # Build tree in reverse (so const node is at top level)
-            return reduce(operator.add, simplified_nodes[::-1])
+            return reduce(operator.add, simplified_nodes)
+
+        if isinstance(simple1, LetIn) and isinstance(simple2, LetIn):
+            #print(f"Matching let statements, \n{simple1.new_vars} {simple1.new_exprs[0]} \n{simple2.new_vars} {simple2.new_exprs[0]} \n\n")
+            if simple1.new_vars == simple2.new_vars and simple1.new_exprs == simple2.new_exprs:
+                #print(f"Matched let statements, {simple1.new_vars}")
+                return LetIn(new_vars = simple1.new_vars, 
+                             new_exprs = simple1.new_exprs, 
+                             expr = simplify(simple1.expr + simple2.expr)
+                            )
+            else:
+                return simple1 + simple2
+
+        if isinstance(simple1, Teg) and isinstance(simple2, Teg):
+            #print(f"Matching teg statements, \n{simple1.dvar} {simple1.upper} \n{simple2.dvar} {simple2.upper}")
+            if simple1.dvar == simple2.dvar and \
+               simple1.lower == simple2.lower and \
+               simple1.upper == simple2.upper:
+                #print(f"Matched Teg statements, {simple1.dvar}, {simple2.dvar}")
+                return simplify(Teg(simple1.lower, simple1.upper, simplify(simple1.body + simple2.body), simple1.dvar))
+                       
+            else:
+                return simple1 + simple2
+        
+        if isinstance(simple1, IfElse) and isinstance(simple2, IfElse):
+            #print(f"Matching IfElse statements, \n{simple1.cond} \n{simple2.cond}")
+            if simple1.cond == simple2.cond:
+                #print(f"Matched IfElse statements, \n{simple1.cond} \n{simple2.cond}")
+                return IfElse(simple1.cond, 
+                                simplify(simple1.if_body + simple2.if_body), 
+                                simplify(simple1.else_body + simple2.else_body)
+                            )
+            else:
+                return simple1 + simple2
+        
+        if isinstance(simple1, Mul) and isinstance(simple2, Mul):
+            # Distribution.
+            # TODO: Account for second term to be t * '1'
+            exprLL, exprLR = simple1.children
+            exprRL, exprRR = simple2.children
+
+            if exprLL == exprRR:
+                #print("Distributed.. ")
+                return simplify(exprLL * (simplify(exprLR + exprRL)))
+            if exprLL == exprRL:
+                #print("Distributed.. ")
+                return simplify(exprLL * (simplify(exprLR + exprRR)))
+            if exprLR == exprRL:
+                #print("Distributed.. ")
+                return simplify(exprLR * (simplify(exprLL + exprRR)))
+            if exprLR == exprRR:
+                #print("Distributed.. ")
+                return simplify(exprLR * (simplify(exprLL + exprRL)))
 
         return simple1 + simple2
 
@@ -110,11 +163,15 @@ def simplify(expr: ITeg) -> ITeg:
             const_node = Const(evaluate(reduce(operator.mul, const_nodes)))
 
             # Re-order to front.
-            simplified_nodes = [const_node] + other_nodes
+            if not (const_node == Const(1)):
+                simplified_nodes = other_nodes + [const_node]
+            else:
+                simplified_nodes = other_nodes
+
             #print('simplified: ', simplified_nodes)
 
             # Build tree in reverse (so const node is at top level)
-            return reduce(operator.mul, simplified_nodes[::-1])
+            return reduce(operator.mul, simplified_nodes)
 
         return simple1 * simple2
 
@@ -147,7 +204,7 @@ def simplify(expr: ITeg) -> ITeg:
 
     elif isinstance(expr, Teg):
         body = simplify(expr.body)
-        if isinstance(body, Var) and hasattr(body, 'value') and body.value == 0:
+        if isinstance(body, Const) and hasattr(body, 'value') and body.value == 0:
             return Const(0)
         return Teg(simplify(expr.lower), simplify(expr.upper), body, expr.dvar)
 
@@ -155,7 +212,27 @@ def simplify(expr: ITeg) -> ITeg:
         return Tup(*(simplify(child) for child in expr))
 
     elif isinstance(expr, LetIn):
-        return LetIn(expr.new_vars, Tup(*(simplify(e) for e in expr.new_exprs)), simplify(expr.expr))
+        # TODO: TEMP
+        #if Var(name = "__norm__", uid = 26) in expr.new_vars or len(expr.new_vars) != 1:
+        #    return LetIn(expr.new_vars, Tup(*(simplify(e) for e in expr.new_exprs)), simplify(expr.expr))
+
+        simplified_exprs = Tup(*(simplify(e) for e in expr.new_exprs))
+        child_expr = simplify(expr.expr)
+        vars_list = expr.new_vars
+
+        for s_var, s_expr in zip(vars_list, simplified_exprs):
+            if isinstance(s_expr, Const):
+                child_expr = substitute(child_expr, s_var, s_expr)
+
+
+        non_const_bindings = [(s_var, s_expr) for s_var, s_expr in zip(vars_list, simplified_exprs) \
+                                                             if not isinstance(s_expr, Const)]
+
+        if non_const_bindings:
+            non_const_vars, non_const_exprs = zip(*list(non_const_bindings))
+            return LetIn(non_const_vars, non_const_exprs, simplify(child_expr))
+        else:
+            return simplify(child_expr)
 
     elif isinstance(expr, (FwdDeriv, RevDeriv)):
         return simplify(expr.deriv_expr)

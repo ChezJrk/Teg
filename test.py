@@ -84,40 +84,47 @@ def evaluate_c(expr: ITeg, num_samples = 1000, ignore_cache = False, silent = Tr
     pcount_before = time.perf_counter()
     c_code = emit(expr, target = 'C', num_samples = num_samples)
     pcount_after = time.perf_counter()
-    print(f'Teg-to-C emit time: {pcount_after - pcount_before:.3f}s')
+    if not silent:
+        print(f'Teg-to-C emit time: {pcount_after - pcount_before:.3f}s')
 
     pcount_before = time.perf_counter()
     binary = compileProgram(c_code)
     pcount_after = time.perf_counter()
-    print(f'C compile time:     {pcount_after - pcount_before:.3f}s')
+    if not silent:
+        print(f'C compile time:     {pcount_after - pcount_before:.3f}s')
 
     pcount_before = time.perf_counter()
     value = runProgram(binary)
     pcount_after = time.perf_counter()
-    print(f'C exec time:        {pcount_after - pcount_before:.3f}s')
+    if not silent:
+        print(f'C exec time:        {pcount_after - pcount_before:.3f}s')
 
     return value
 
 
-FAST_EVAL = True
 def evaluate(*args, **kwargs):
-    if FAST_EVAL:
+    fast_eval = kwargs.pop('fast_eval', True)
+    if fast_eval:
+        if not kwargs.get('silent', True):
+            print('Evaluating in fast-mode: C')
         return evaluate_c(*args, **kwargs)
     else:
+        if not kwargs.get('silent', True):
+            print('Evaluating using numpy/python')
         return evaluate_numpy(*args, **kwargs)
 
 # TODO: move to test utils later.
 def finite_difference(expr, var, delta = 0.005, num_samples = 10000):
     assert var.value is not None, f'Provide a binding for var in order to compute it'
-    
+
     base = var.value
     # Compute upper and lower values.
     expr.bind_variable(var, base + delta)
-    plus_delta = evaluate(expr, ignore_cache = True, num_samples = num_samples)
+    plus_delta = evaluate(expr, ignore_cache = True, num_samples = num_samples, fast_eval = True)
     print('Value at base + delta', plus_delta)
 
     expr.bind_variable(var, base - delta)
-    minus_delta = evaluate(expr, ignore_cache = True, num_samples = num_samples)
+    minus_delta = evaluate(expr, ignore_cache = True, num_samples = num_samples, fast_eval = True)
     print('Value at base - delta', minus_delta)
 
     # Reset value.
@@ -888,26 +895,28 @@ class AffineConditionsTest(TestCase):
         #     int_{y=[0, 1]}
         #         ((x - y + 2 * t1=0.25 + 3 * t2=1 - 3 < 0) ? 1 : 0)
 
-        d_t1 = finite_difference(integral, t1)
-        d_t2 = finite_difference(integral, t2)
-        #d_t1 = 0.5
-        #d_t2 = -0.5
+        #d_t1 = finite_difference(integral, t1)
+        #d_t2 = finite_difference(integral, t2)
+        d_t1 = -1.0
+        d_t2 = -1.5
 
         deriv_integral = RevDeriv(integral, Tup(Const(1)))
-        #print("Simplified:")
-        #print(simplify(deriv_integral.deriv_expr))
-        check_nested_lists(self, evaluate(simplify(deriv_integral), num_samples = 5000),
+        print("Simplified:")
+        print(simplify(deriv_integral.deriv_expr))
+        check_nested_lists(self, evaluate(simplify(deriv_integral), num_samples = 5000, fast_eval = True),
                         [d_t1, d_t2], places = 2)
 
         deriv_integral = FwdDeriv(integral, [(t1, 1), (t2, 0)])
         sd = simplify(deriv_integral.deriv_expr)
+        print("Simplified:")
+        print(sd)
 
-        self.assertAlmostEqual( evaluate(sd, num_samples = 5000),
+        self.assertAlmostEqual( evaluate(sd, num_samples = 5000, fast_eval = True),
                                 d_t1,
                                 places = 2 )
 
         deriv_integral = FwdDeriv(integral, [(t1, 0), (t2, 1)])
-        self.assertAlmostEqual( evaluate(simplify(deriv_integral), num_samples = 5000),
+        self.assertAlmostEqual( evaluate(simplify(deriv_integral), num_samples = 5000, fast_eval = True),
                                 d_t2,
                                 places = 2 )
 
@@ -918,14 +927,26 @@ class AffineConditionsTest(TestCase):
         body = Teg(self.zero, self.one, cond, y)
         integral = Teg(self.zero, self.one, body, x)
 
-        deriv_integral = FwdDeriv(integral, [(t1, 1), (t2, 0)])
-        sd = simplify(deriv_integral.deriv_expr)
-        fd = finite_difference(integral, t1)
+        #deriv_integral = FwdDeriv(integral, [(t1, 1), (t2, 0)])
+        #sd = simplify(deriv_integral.deriv_expr)
+        d_t1 = finite_difference(integral, t1)
+        d_t2 = finite_difference(integral, t2)
 
-        self.assertAlmostEqual(evaluate(sd, num_samples = 5000), fd, places = 2)
+        #self.assertAlmostEqual(evaluate(sd, num_samples = 5000, fast_eval = True), d_t1, places = 2)
 
-        #deriv_integral = FwdDeriv(integral, [(t1, 0), (t2, 1)])
-        #self.assertAlmostEqual(evaluate(simplify(deriv_integral)), 1.5)
+        print([d_t1, d_t2])
+        deriv_integral = RevDeriv(integral, Tup(Const(1)))
+        sd = simplify(deriv_integral)
+        print(sd)
+
+        #self.assertAlmostEqual(evaluate(sd, fast_eval = True, num_samples = 10000), d_t1, places = 2)
+        check_nested_lists(self, evaluate(sd, num_samples = 5000, fast_eval = True),
+                           [d_t1, d_t2], places = 2)
+
+        #deriv_integral = FwdDeriv(integral, [(t1, 1)])
+        #sd = simplify(deriv_integral)
+        #print(sd)
+        #self.assertAlmostEqual(evaluate(sd, fast_eval = True), d_t1, places = 2)
 
         """
         expr, full_expr = fwd_deriv(integral, [(t1, 1), (t2, 0)])
@@ -961,13 +982,51 @@ class AffineConditionsTest(TestCase):
         fd = finite_difference(integral, t1)
         #fd = -0.25
 
-        self.assertAlmostEqual(evaluate(sd, num_samples = 5000), fd, places = 2)
+        self.assertAlmostEqual(evaluate(sd, num_samples = 5000, fast_eval = True), fd, places = 2)
 
         print([d_t1, d_t2, d_t3, d_t4])
         deriv_integral = RevDeriv(integral, Tup(Const(1)))
-        check_nested_lists(self, evaluate(simplify(deriv_integral), num_samples = 5000),
+        check_nested_lists(self, evaluate(simplify(deriv_integral), num_samples = 5000, fast_eval = True),
                         [d_t1, d_t2, d_t3, d_t4], places = 2)
 
+def compare_eval_methods(self, *args, **kwargs):
+    places = kwargs.pop("places", 7)
+    numpy_output = evaluate(*args, **kwargs, fast_eval = False)
+    c_output = evaluate(*args, **kwargs, fast_eval = True)
+    if type(c_output) is list:
+        assert len(numpy_output) == len(c_output), f"Output lengths do not match"
+        check_nested_lists(self, numpy_output, c_output, places = places)
+    else:
+        self.assertAlmostEqual(numpy_output, c_output, places = places)
+
+class FastEvalTest(TestCase):
+
+    def setUp(self):
+        self.zero, self.one = Const(0), Const(1)
+
+    def test_let_inner(self):
+        x = TegVar('x')
+        t = Var('t', 1)
+        integral = Teg(self.zero, self.one, LetIn([t], [Const(1)], x*t), x)
+        compare_eval_methods(self, integral, places = 2)
+
+    def test_let_outer(self):
+        x = TegVar('x')
+        t = Var('t', 1)
+        integral = LetIn([t], [Const(1)], t * Teg(self.zero, self.one, x * t, x))
+        compare_eval_methods(self, integral, places = 2)
+
+    def test_overlapping_let(self):
+        x = TegVar('x')
+        t = Var('t', 1)
+        integral = LetIn([t], [Const(1)], t * Teg(self.zero, self.one, LetIn([t], [Const(1)], x*t), x))
+        compare_eval_methods(self, integral, places = 2)
+
+    def test_tuple_integration(self):
+        x = TegVar('x')
+        t = Var('t', 1)
+        integral = LetIn([t], [Const(1)], t * Teg(self.zero, self.one, LetIn([t], [Const(1)], Tup(x*t, 2*x*t)), x))
+        compare_eval_methods(self, integral, places = 2)
 
 if __name__ == '__main__':
     unittest.main()

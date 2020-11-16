@@ -107,7 +107,7 @@ class TegOverloads:
 class TegVariableOverloads:
 
     def __eq__(self, other):
-        return (type(self) == type(other)
+        return (isinstance(self, Var) and isinstance(other, Var)
                 and self.name == other.name
                 and self.uid == other.uid)
 
@@ -124,11 +124,6 @@ class TegVariableOverloads:
 
 @overloads(TegVar)
 class TegTegVariableOverloads:
-
-    def __eq__(self, other):
-        return (type(self) == type(other)
-                and self.name == other.name
-                and self.uid == other.uid)
 
     def __str__(self):
         value = '' if self.value is None else f'={self.value}'
