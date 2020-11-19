@@ -430,6 +430,10 @@ def rotated_delta_contribution(expr: Teg,
 
             # Extract rotation.
             raw_affine_set = extract_coefficients_from_affine_tree(discont_bool.left_expr - discont_bool.right_expr)
+            
+            # Add a constant term if there isn't one.
+            if ('__const__', -1) not in raw_affine_set:
+                raw_affine_set[('__const__', -1)] = Const(0)
 
             # Extract source variables (in order).
             source_vars = [ TegVar(name = idname[0], uid = idname[1]) for idname in var_list(affine_to_linear(raw_affine_set)) ]
