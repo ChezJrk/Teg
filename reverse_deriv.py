@@ -27,7 +27,11 @@ def reverse_deriv_transform(expr: ITeg,
                             not_ctx: Set[Tuple[str, int]],
                             teg_list: Set[Tuple[TegVar, ITeg, ITeg]]) -> Iterable[Tuple[Tuple[str, int], ITeg]]:
 
-    if isinstance(expr, (Const, TegVar)):
+    if isinstance(expr, TegVar):
+        if (expr.name, expr.uid) not in not_ctx:
+            yield ((f'd{expr.name}', expr.uid), out_deriv_vals)
+
+    elif isinstance(expr, Const):
         pass
 
     elif isinstance(expr, Var):
@@ -63,11 +67,17 @@ def reverse_deriv_transform(expr: ITeg,
     elif isinstance(expr, Teg):
         not_ctx.discard((expr.dvar.name, expr.dvar.uid))
         #moving_var_data = delta_contribution(expr, not_ctx)
-        delta_set = rotated_delta_contribution(expr, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
 
-        #delta_deriv_list = ((name_uid, remapping(out_deriv_vals * delta_expr * deriv_expr))
-        #            for delta_expr, distance_to_delta, remapping in delta_set
-        #            for name_uid, deriv_expr in reverse_deriv_transform(distance_to_delta, Const(1), not_ctx, teg_list))
+        # Apply Leibniz rule directly for moving boundaries
+        lower_derivs = reverse_deriv_transform(expr.lower, out_deriv_vals, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
+        upper_derivs = reverse_deriv_transform(expr.upper, out_deriv_vals, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
+        yield from ((name_uid, upper_deriv * substitute(expr.body, expr.dvar, expr.upper))
+                    for name_uid, upper_deriv in upper_derivs)
+        yield from ((name_uid, - lower_deriv * substitute(expr.body, expr.dvar, expr.lower))
+                    for name_uid, lower_deriv in lower_derivs)
+
+        not_ctx.add((expr.dvar.name, expr.dvar.uid))
+        delta_set = rotated_delta_contribution(expr, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
 
         for delta in delta_set:
             delta_expr, distance_to_delta, remapping = delta
@@ -84,15 +94,6 @@ def reverse_deriv_transform(expr: ITeg,
 
             yield from delta_deriv_list
 
-        # Apply Leibniz rule directly for moving boundaries
-        lower_derivs = reverse_deriv_transform(expr.lower, out_deriv_vals, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
-        upper_derivs = reverse_deriv_transform(expr.upper, out_deriv_vals, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
-        yield from ((name_uid, upper_deriv * substitute(expr.body, expr.dvar, expr.upper))
-                    for name_uid, upper_deriv in upper_derivs)
-        yield from ((name_uid, - lower_deriv * substitute(expr.body, expr.dvar, expr.lower))
-                    for name_uid, lower_deriv in lower_derivs)
-
-        not_ctx.add((expr.dvar.name, expr.dvar.uid))
         deriv_body_traces = reverse_deriv_transform(expr.body, Const(1), 
                                             not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
         yield from ((name_uid, out_deriv_vals * Teg(expr.lower, expr.upper, deriv_body, expr.dvar))
@@ -157,7 +158,7 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup) -> ITeg:
         sorted_list.sort(key = lambda a:a[0])
         _, new_vars, new_vals = list(zip(*sorted_list))
 
-        print('Reverse-mode list order: ', ''.join([str(var) + ', ' for var in new_vars]))
+        #print('Reverse-mode list order: ', ''.join([str(var) + ', ' for var in new_vars]))
 
         assert len(new_vals) > 0, 'There must be variables to compute derivatives. '
         out_expr = Tup(*new_vars) if len(new_vars) > 1 else new_vars[0]
