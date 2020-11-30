@@ -980,5 +980,6 @@ class FastEvalTest(TestCase):
         integral = LetIn([t], [Const(1)], t * Teg(self.zero, self.one, LetIn([t], [Const(1)], Tup(x*t, 2*x*t)), x))
         compare_eval_methods(self, integral, places = 2)
 
+
 if __name__ == '__main__':
     unittest.main()
