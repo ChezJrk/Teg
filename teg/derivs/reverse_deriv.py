@@ -1,7 +1,10 @@
 from typing import Set, Tuple, Iterable, Optional
 from collections import defaultdict
+from functools import reduce
+import time
+import operator
 
-from integrable_program import (
+from teg import (
     ITeg,
     Const,
     Var,
@@ -15,12 +18,12 @@ from integrable_program import (
     LetIn,
     SmoothFunc
 )
-from fwd_deriv import delta_contribution, rotated_delta_contribution
-from substitute import substitute
-from remap import remap, is_remappable
-import time
-from functools import reduce
-import operator
+
+from teg.passes.substitute import substitute
+from teg.passes.remap import remap, is_remappable
+
+from .edge.rotated import rotated_delta_contribution
+
 
 def reverse_deriv_transform(expr: ITeg,
                             out_deriv_vals: Tuple,
@@ -54,7 +57,7 @@ def reverse_deriv_transform(expr: ITeg,
 
     elif isinstance(expr, SmoothFunc):
         child = expr.expr
-        yield from reverse_deriv_transform(child, expr.rev_deriv(out_deriv_expr = out_deriv_vals), not_ctx, teg_list)
+        yield from reverse_deriv_transform(child, expr.rev_deriv(out_deriv_expr=out_deriv_vals), not_ctx, teg_list)
 
     elif isinstance(expr, IfElse):
         derivs_if = reverse_deriv_transform(expr.if_body, Const(1), not_ctx, teg_list)
@@ -66,7 +69,6 @@ def reverse_deriv_transform(expr: ITeg,
 
     elif isinstance(expr, Teg):
         not_ctx.discard((expr.dvar.name, expr.dvar.uid))
-        #moving_var_data = delta_contribution(expr, not_ctx)
 
         # Apply Leibniz rule directly for moving boundaries
         lower_derivs = reverse_deriv_transform(expr.lower, out_deriv_vals, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
@@ -81,7 +83,7 @@ def reverse_deriv_transform(expr: ITeg,
 
         for delta in delta_set:
             delta_expr, distance_to_delta, remapping = delta
-            #print(f"DERIV: {distance_to_delta}")
+            # print(f"DERIV: {distance_to_delta}")
             delta_deriv_parts = [(name_uid, deriv_expr) for name_uid, deriv_expr in reverse_deriv_transform(distance_to_delta, Const(1), not_ctx, teg_list)]
 
             delta_deriv_dict = {}
@@ -149,16 +151,16 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup) -> ITeg:
             partial_deriv_map[name_uid] += e
 
         # Introduce fresh variables for each partial derivative
-        uids =     [var_uid for var_name, var_uid in partial_deriv_map.keys()]
+        uids = [var_uid for var_name, var_uid in partial_deriv_map.keys()]
         new_vars = [Var(var_name) for var_name, var_uid in partial_deriv_map.keys()]
         new_vals = [*partial_deriv_map.values()]
         new_vals = [remap_all(e) for e in new_vals]
 
         sorted_list = list(zip(uids, new_vars, new_vals))
-        sorted_list.sort(key = lambda a:a[0])
+        sorted_list.sort(key=lambda a:a[0])
         _, new_vars, new_vals = list(zip(*sorted_list))
 
-        #print('Reverse-mode list order: ', ''.join([str(var) + ', ' for var in new_vars]))
+        # print('Reverse-mode list order: ', ''.join([str(var) + ', ' for var in new_vars]))
 
         assert len(new_vals) > 0, 'There must be variables to compute derivatives. '
         out_expr = Tup(*new_vars) if len(new_vars) > 1 else new_vars[0]

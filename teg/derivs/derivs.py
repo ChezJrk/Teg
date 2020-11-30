@@ -1,6 +1,11 @@
-from integrable_program import ITeg, Tup, Ctx
-from fwd_deriv import fwd_deriv
-from reverse_deriv import reverse_deriv
+from teg import (
+    ITeg,
+    Tup,
+    Ctx
+)
+
+from .fwd_deriv import fwd_deriv
+from .reverse_deriv import reverse_deriv
 
 
 class FwdDeriv(ITeg):

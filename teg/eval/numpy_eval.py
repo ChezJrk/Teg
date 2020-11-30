@@ -1,6 +1,6 @@
 import numpy as np
 
-from integrable_program import (
+from teg import (
     ITeg,
     Const,
     Var,
@@ -16,7 +16,8 @@ from integrable_program import (
     Invert,
     SmoothFunc
 )
-from derivs import FwdDeriv, RevDeriv
+
+from teg.derivs import FwdDeriv, RevDeriv
 
 
 def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):

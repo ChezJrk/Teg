@@ -1,8 +1,5 @@
 """Add operator overload methods to Teg classes. """
-import numpy as np
-
-from integrable_program import (
-    Placeholder,
+from .integrable_program import (
     SmoothFunc,
     ITeg,
     Const,
@@ -11,7 +8,6 @@ from integrable_program import (
     Mul,
     IfElse,
     Teg,
-    TegRemap,
     TegVar,
     Tup,
     LetIn,
@@ -21,6 +17,11 @@ from integrable_program import (
     Bool,
     And,
     Or,
+)
+
+from .markers import (
+    Placeholder,
+    TegRemap
 )
 
 

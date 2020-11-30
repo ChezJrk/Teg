@@ -1,4 +1,7 @@
-from integrable_program import (
+from functools import reduce
+import operator
+
+from teg import (
     ITeg,
     Const,
     Var,
@@ -14,17 +17,16 @@ from integrable_program import (
     Or,
     Invert,
 )
-from derivs import FwdDeriv, RevDeriv
+from teg.derivs import FwdDeriv, RevDeriv
 
-from emit_c import CEmitter
+from .emit_c import CEmitter
 
-from functools import reduce
-import operator
 
 TARGETS = {
-    'C' : (CEmitter, {}),
-    'CUDA_C' : (CEmitter, {'device_code': True})
+    'C': (CEmitter, {}),
+    'CUDA_C': (CEmitter, {'device_code': True})
 }
+
 
 def merge(d1: dict, d2: dict):
     new_d = {}
@@ -32,20 +34,25 @@ def merge(d1: dict, d2: dict):
     new_d.update(d2)
     return new_d
 
+
 def clean_name(varname):
     return varname
 
-def emit(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False, target = 'C', fn_name = 'teg_program', float_type = 'float', types = {}, arglist = []):
+
+def emit(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False, target='C',
+         fn_name='teg_program', float_type='float', types={}, arglist=[]):
     assert target in TARGETS.keys(), f'Target language "{target}" is not supported at this time.'
     emitter_class, emitter_args = TARGETS[target]
-    emitter = emitter_class(float_type = float_type, **emitter_args)
+    emitter = emitter_class(float_type=float_type, **emitter_args)
 
-    method = emitter.method(_emit(expr, num_samples, ignore_cache, emitter, type_ctx = types), method_name = fn_name, arglist = arglist)
+    method = emitter.method(_emit(expr, num_samples, ignore_cache, emitter, type_ctx=types),
+                            method_name=fn_name, arglist=arglist)
 
     return method
 
-def _emit(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False, emitter = None, type_ctx = None):
-    assert emitter is not None, f'Use emit() instead of _emit()'
+
+def _emit(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False, emitter=None, type_ctx=None):
+    assert emitter is not None, 'Use emit() instead of _emit()'
 
     if isinstance(expr, Const):
         return emitter.literal(expr.value)
@@ -56,13 +63,13 @@ def _emit(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False, emitter
             assert (expr.name, expr.uid) in type_ctx.keys(), f'"{expr.name}"" does not have a type binding.'
             ctype, size = type_ctx[(expr.name, expr.uid)]
         else:
-            #print(type(expr.value))
+            # print(type(expr.value))
             ctype = emitter.float_type
             size = 1
-            assert ctype is not None, f"Default values other than float or integer are not supported"
+            assert ctype is not None, "Default values other than float or integer are not supported"
 
-        code = emitter.variable(f"{expr.name}_{expr.uid}", ctype = ctype, size = size, assigned = False, 
-                                    default = float(expr.value) if expr.value is not None else None)
+        code = emitter.variable(f"{expr.name}_{expr.uid}", ctype=ctype, size=size, assigned=False,
+                                default=float(expr.value) if expr.value is not None else None)
         return code
 
     elif isinstance(expr, (Add, Mul)):
@@ -85,13 +92,13 @@ def _emit(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False, emitter
 
     elif isinstance(expr, SmoothFunc):
         code = _emit(expr.expr, num_samples, ignore_cache, emitter, type_ctx)
-        fn_code = emitter.smooth_func(code, op = type(expr))
+        fn_code = emitter.smooth_func(code, op=type(expr))
         return fn_code
 
     elif isinstance(expr, IfElse):
-        cond       = _emit(expr.cond,      num_samples, ignore_cache, emitter, type_ctx)
-        if_body    = _emit(expr.if_body,   num_samples, ignore_cache, emitter, type_ctx)
-        else_body  = _emit(expr.else_body, num_samples, ignore_cache, emitter, type_ctx)
+        cond = _emit(expr.cond,      num_samples, ignore_cache, emitter, type_ctx)
+        if_body = _emit(expr.if_body,   num_samples, ignore_cache, emitter, type_ctx)
+        else_body = _emit(expr.else_body, num_samples, ignore_cache, emitter, type_ctx)
 
         return emitter.condition(cond, if_body, else_body)
 
@@ -105,7 +112,7 @@ def _emit(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False, emitter
         loop_body = _emit(expr.body, num_samples, ignore_cache, emitter, type_ctx)
 
         ctype, size = new_bindings[(expr.dvar.name, expr.dvar.uid)]
-        bind_var = emitter.variable(f"{expr.dvar.name}_{expr.dvar.uid}", ctype = ctype, size = size)
+        bind_var = emitter.variable(f"{expr.dvar.name}_{expr.dvar.uid}", ctype=ctype, size=size)
 
         aggregate_value = emitter.aggregate(
                             emitter.variable().out_var,
@@ -130,7 +137,10 @@ def _emit(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False, emitter
             var_code = _emit(e, num_samples, ignore_cache, emitter, type_ctx)
             assignment_list.append(
                     emitter.assign(
-                        emitter.variable(f"{var.name}_{var.uid}", ctype = var_code.out_var.ctype, size = var_code.out_var.size).out_var,
+                        emitter.variable(f"{var.name}_{var.uid}",
+                                         ctype=var_code.out_var.ctype,
+                                         size=var_code.out_var.size
+                                         ).out_var,
                         var_code
                     )
                 )

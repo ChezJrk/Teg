@@ -1,26 +1,29 @@
 from functools import reduce
 import operator
 
-from smooth import (
-    Sqrt, Sqr
+from teg.math import (
+    Sqrt,
+    Sqr
 )
 
 FUNC_MAPPING = {
-    Sqrt:  (lambda x : f'sqrt({x})'),
-    Sqr :  (lambda x : f'pow({x}, 2)')
+    Sqrt: (lambda x: f'sqrt({x})'),
+    Sqr:  (lambda x: f'pow({x}, 2)')
 }
 
-def project_sizes(size1 : int, size2 : int):
+
+def project_sizes(size1: int, size2: int):
     if size1 == 1:
         return size2
     elif size2 == 1:
         return size1
     else:
-        assert size1 == size2, f'Size mismatch'
+        assert size1 == size2, 'Size mismatch'
         return size1
 
+
 class C_SSAVar:
-    def __init__(self, name, ctype = None, size = None, assigned = False, default = None):
+    def __init__(self, name, ctype=None, size=None, assigned=False, default=None):
         self.name = name
         self.ctype = ctype
         self.size = size
@@ -50,8 +53,9 @@ class C_SSAVar:
         string = f"{assigned_string} {type_string} {self.name}{size_string} {default_string}"
         return string
 
+
 class VarContext:
-    def __init__(self, _vars = None):
+    def __init__(self, _vars=None):
         if _vars is not None:
             self.vars = _vars
         else:
@@ -73,7 +77,8 @@ class VarContext:
         else:
             ov = self.vars[out_var.name]
             assert ov == out_var, \
-                f'Variable {out_var.name} has two incompatible types: {out_var.ctype}[{out_var.size}] and {ov.ctype}[{ov.size}]'
+                f'Variable {out_var.name} has two incompatible types: \
+                  {out_var.ctype}[{out_var.size}] and {ov.ctype}[{ov.size}]'
 
     def all_used_vars(self):
         # TODO: Compress
@@ -117,12 +122,13 @@ class VarContext:
         pstr += "}"
         return pstr
 
+
 class C_SSACode:
-    def __init__(self, out_var: C_SSAVar, code = None, ctx: VarContext = None, no_assign: bool = False):
+    def __init__(self, out_var: C_SSAVar, code=None, ctx: VarContext = None, no_assign: bool = False):
         self.out_var = out_var
         self.code = code
 
-        #if code is not None:
+        # if code is not None:
         #    self.out_var.assigned = not no_assign
 
         if ctx is None:
@@ -132,7 +138,7 @@ class C_SSACode:
         self.ctx.put_var(self.out_var)
 
         for k in self.ctx.vars.keys():
-            assert type(k) is str, f'Inconsistency detected'
+            assert type(k) is str, 'Inconsistency detected'
 
     def __add__(self, o):
         if self.code is None:
@@ -147,8 +153,9 @@ class C_SSACode:
         (Unassigned: {[var.name for var in self.ctx.all_unused_vars()]}, \
         Assigned: {[var.name for var in self.ctx.all_used_vars()]})"
 
+
 class C_Method:
-    def __init__(self, name = '', code = None, arglist = None, ctype = None, size = None):
+    def __init__(self, name='', code=None, arglist=None, ctype=None, size=None):
         self.name = name
         self.code = code
         self.arglist = arglist if arglist is not None else []
@@ -166,11 +173,12 @@ class C_Method:
 
         return f"C_Method {self.name}:[{argstring}]->{self.ctype}[{self.size}] {{ {self.code} }}"
 
+
 class CEmitter:
-    def __init__(self, device_code = False, float_type = 'float'):
+    def __init__(self, device_code=False, float_type='float'):
         self.vars = {}
         self.var_counters = {}
-        
+
         self.device_code = device_code
         self.float_type = float_type
 
@@ -185,52 +193,51 @@ class CEmitter:
 
         return new_varname
 
-    def literal(self, value = None, out_var = None):
-        assert value is not None, f"Literals must have a value"
+    def literal(self, value=None, out_var=None):
+        assert value is not None, "Literals must have a value"
 
         try:
             value = float(value)
-        except:
+        except ValueError:
             raise ValueError(f'{value} cannot be converted into a real number.')
 
         ctype = self.float_type
         size = 1
 
-        assert ctype is not None, f"Default values other than float or integer are not supported"
+        assert ctype is not None, "Default values other than float or integer are not supported"
 
         if out_var is None:
             out_var = self._draw_varname(prefix='_l_')
 
-        out_ssavar = C_SSAVar(out_var, ctype = ctype, size = size, assigned = True)
+        out_ssavar = C_SSAVar(out_var, ctype=ctype, size=size, assigned=True)
 
         return C_SSACode(out_ssavar, f'{out_ssavar.name} = {value};')
 
-    def variable(self, varname: str = None, ctype: str = None, size: int = None, assigned: bool = False, default = None):
+    def variable(self, varname: str = None, ctype: str = None, size: int = None, assigned: bool = False, default=None):
         if varname is not None:
             # Make named variable with specific type.
             assert (ctype is not None) and (size is not None), f'For named variables, a type must be provided.'
-            out_ssavar = C_SSAVar( varname, 
-                                   ctype = ctype, 
-                                   size = size, 
-                                   assigned = assigned, 
-                                   default = default)
+            out_ssavar = C_SSAVar(varname,
+                                  ctype=ctype,
+                                  size=size,
+                                  assigned=assigned,
+                                  default=default)
             return C_SSACode(out_ssavar, None)
         else:
             # Make variable with random name for intermediate assignment.
             random_name = self._draw_varname()
-            out_ssavar = C_SSAVar( random_name, 
-                                   assigned = assigned, 
-                                   ctype = ctype, 
-                                   size = size,
-                                   default = default)
+            out_ssavar = C_SSAVar(random_name,
+                                  assigned=assigned,
+                                  ctype=ctype,
+                                  size=size,
+                                  default=default)
             return C_SSACode(out_ssavar, None)
 
-
-    # Aggregation primitive. Provides additional options for languages where fast 
-    # aggregation mechanisms exist. For C, it's the same as using a loop
     def aggregate(self, index_var, lower_code, upper_code, num_code, bind_var, loop_code):
+        # Aggregation primitive. Provides additional options for languages where fast 
+        # aggregation mechanisms exist. For C, it's the same as using a loop
         agg_code = lower_code + upper_code + num_code
-        
+
         # Type inference for dependent variables.
         index_var.set_type('int', 1)
         index_var.require_decl()

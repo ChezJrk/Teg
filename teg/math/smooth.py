@@ -2,7 +2,7 @@
     Declares popularly used smooth functions.
 """
 
-from integrable_program import (
+from teg import (
     ITeg,
     Const,
     Var,

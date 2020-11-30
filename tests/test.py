@@ -1,8 +1,10 @@
 import unittest
 from unittest import TestCase
 import numpy as np
+import subprocess
+import time
 
-from integrable_program import (
+from teg import (
     ITeg,
     Const,
     Var,
@@ -14,75 +16,18 @@ from integrable_program import (
     Tup,
     LetIn,
 )
-from evaluate import evaluate as evaluate_numpy
-from derivs import FwdDeriv, RevDeriv
-from fwd_deriv import fwd_deriv
-import operator_overloads  # noqa: F401
-from simplify import simplify
-from remap import remap_gather
-from compile import emit
-import subprocess
-import time
 
-def runProgram(program, silent = False):
-    prog_name, out_size = program
-    proc = subprocess.Popen([prog_name], stdout=subprocess.PIPE, shell=True)
-    (out, err) = proc.communicate()
+from teg.derivs import FwdDeriv, RevDeriv
+from teg.ir import emit
+from teg.passes.simplify import simplify
+from teg.eval import numpy_eval as evaluate_numpy
 
-    if err is not None:
-        print(f"Error: {err}")
-        print(f"Output: {out}")
-
-    if out_size > 1:
-        return [ float(line) for line in out.decode().split('\n')[:out_size] ]
-    else:
-        return float(out)
-
-def compileProgram(program, silent=True):
-    fn_name, arglist, code, out_size = (program.name, program.arglist, program.code, program.size)
-
-    for arg in arglist:
-        assert arg.default is not None, f'Var {arg.name} does not have a default value. Such programs are not currently supported'
-
-    # Build dummy main function
-    if out_size == 1:
-        main_code = f' \n' +\
-                f'int main(int argc, char** argv){{\n' +\
-                f'  std::cout << {fn_name}();\n' +\
-                f'  return 0;\n' +\
-                f'}}'
-    else:
-        main_code = f' \n' +\
-                f'int main(int argc, char** argv){{\n' +\
-                f'  {fn_name}_result s = {fn_name}();\n' +\
-                f'  for(int i = 0; i < {out_size}; i++){{' +\
-                f'      std::cout << s.o[i] << std::endl;\n' +\
-                f'  }}' +\
-                f'  return 0;\n' + \
-                f'}}'
-    
-
-    # Include basic IO
-    header_code = "#include <iostream>\n" + "#include <math.h>\n"
-
-    all_code = header_code + code + main_code
-    cppfile = open("/tmp/_teg_cpp_out.cpp", "w")
-    cppfile.write(all_code)
-    cppfile.close()
-
-    proc = subprocess.Popen("g++ /tmp/_teg_cpp_out.cpp -o /tmp/_teg_cpp_out -O3", stdout=subprocess.PIPE, shell=True)
-    (out, err) = proc.communicate()
-
-    if err is not None:
-        print(f"Error: {err}")
-        print(f"Output: {out}")
-
-    return "/tmp/_teg_cpp_out", out_size
+from c_utils import runProgram, compileProgram
 
 
-def evaluate_c(expr: ITeg, num_samples = 5000, ignore_cache = False, silent = True):
+def evaluate_c(expr: ITeg, num_samples=5000, ignore_cache=False, silent=True):
     pcount_before = time.perf_counter()
-    c_code = emit(expr, target = 'C', num_samples = num_samples)
+    c_code = emit(expr, target='C', num_samples=num_samples)
     pcount_after = time.perf_counter()
     if not silent:
         print(f'Teg-to-C emit time: {pcount_after - pcount_before:.3f}s')
@@ -113,19 +58,20 @@ def evaluate(*args, **kwargs):
             print('Evaluating using numpy/python')
         return evaluate_numpy(*args, **kwargs)
 
+
 # TODO: move to test utils later.
-def finite_difference(expr, var, delta = 0.005, num_samples = 10000, silent = True):
+def finite_difference(expr, var, delta=0.005, num_samples=10000, silent=True):
     assert var.value is not None, f'Provide a binding for var in order to compute it'
 
     base = var.value
     # Compute upper and lower values.
     expr.bind_variable(var, base + delta)
-    plus_delta = evaluate(expr, ignore_cache = True, num_samples = num_samples, fast_eval = True)
+    plus_delta = evaluate(expr, ignore_cache=True, num_samples=num_samples, fast_eval=True)
     if not silent:
         print('Value at base + delta', plus_delta)
 
     expr.bind_variable(var, base - delta)
-    minus_delta = evaluate(expr, ignore_cache = True, num_samples = num_samples, fast_eval = True)
+    minus_delta = evaluate(expr, ignore_cache=True, num_samples=num_samples, fast_eval=True)
     if not silent:
         print('Value at base - delta', minus_delta)
 
@@ -134,6 +80,7 @@ def finite_difference(expr, var, delta = 0.005, num_samples = 10000, silent = Tr
 
     gradient = (plus_delta - minus_delta) / (2 * delta)
     return gradient
+
 
 def check_nested_lists(self, results, expected, places=7):
     for res, exp in zip(results, expected):
@@ -144,6 +91,7 @@ def check_nested_lists(self, results, expected, places=7):
             err = f'Result {res} of type {type(res)} and expected {exp} of type {type(exp)}'
             assert isinstance(res, t) and isinstance(exp, t), err
             self.assertAlmostEqual(res, exp, places)
+
 
 class TestArithmetic(TestCase):
 

@@ -1,4 +1,4 @@
-from integrable_program import (
+from teg import (
     ITeg,
     Const,
     Var,
@@ -21,8 +21,6 @@ from integrable_program import (
     true,
     false,
 )
-
-import operator_overloads  # noqa: F401
 
 
 def substitute(expr: ITeg, this_expr: ITeg, that_expr: ITeg) -> ITeg:

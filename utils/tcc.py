@@ -1,6 +1,8 @@
-import compile
-from simplify import simplify
 from optparse import OptionParser
+import importlib.util
+
+from teg.ir import emit
+from teg.passes import simplify
 
 parser = OptionParser()
 parser.add_option("-o", "--output", dest="output", help="output file")
@@ -17,7 +19,7 @@ input_file = args[0]
 print(input_file)
 output_file = options.output
 
-import importlib.util
+
 spec = importlib.util.spec_from_file_location("module.name", input_file)
 print(f"Building program {input_file}")
 code_module = importlib.util.module_from_spec(spec)
@@ -36,11 +38,12 @@ else:
     arglist = []
 
 print(f"Converting to {options.target} file {output_file}")
-method = compile.emit(program, target = options.target, 
-                               fn_name = options.method, 
-                               arglist = [f'{var.name}_{var.uid}' for var in arglist],
-                               num_samples = options.samples,
-                               float_type = float_type)
+method = emit(program,
+              target=options.target,
+              fn_name=options.method,
+              arglist=[f'{var.name}_{var.uid}' for var in arglist],
+              num_samples=options.samples,
+              float_type=float_type)
 
 ofile = open(output_file, "w")
 ofile.write(method.code)
