@@ -222,11 +222,11 @@ def remap_gather(expr: ITeg):
 
         remap_expr, remapped_tree, teg_list = remap_gather(expr.if_body)
         if remap_expr is not None:
-            return remap_expr, IfElse(cond, remapped_tree, expr.else_body), teg_list
+            return remap_expr, IfElse(expr.cond, remapped_tree, expr.else_body), teg_list
 
         remap_expr, remapped_tree, teg_list = remap_gather(expr.else_body)
         if remap_expr is not None:
-            return remap_expr, IfElse(cond, expr.if_body, remapped_tree), teg_list
+            return remap_expr, IfElse(expr.cond, expr.if_body, remapped_tree), teg_list
 
         return None, None, []
 

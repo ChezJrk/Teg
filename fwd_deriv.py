@@ -108,42 +108,39 @@ def combine_affine_sets(affine_lists: List[Dict[Tuple[str, int], ITeg]], op):
 
     return combined_set
 
-
-def is_expr_parametric(expr: ITeg) -> bool:
+def is_expr_parametric(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> bool:
     if isinstance(expr, TegVar):
-        return False
+        return False if (expr.name, expr.uid) in not_ctx else True
     elif isinstance(expr, (Var, Const)):
         return True
     else:
         return True
 
-    return reduce([ is_expr_parametric(child) for child in expr.children ], operator.and_)
+    return reduce([ is_expr_parametric(child, not_ctx) for child in expr.children ], operator.and_)
 
-
-def check_affine_tree(expr: ITeg) -> bool:
+def check_affine_tree(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> bool:
     if isinstance(expr, Mul):
-        cvals = [ is_expr_parameteric(child) for child in expr.children ]
+        cvals = [ is_expr_parameteric(child, not_ctx) for child in expr.children ]
         return (cvals.count(False) == 1) and check_affine_tree(expr.children[cvals.index(False)])
     elif isinstance(expr, Add): 
-        return reduce([ check_affine_tree(child) for child in expr.children ], operator.and_)
-    elif isinstance(expr, TegVar):
+        return reduce([ check_affine_tree(child, not_ctx) for child in expr.children ], operator.and_)
+    elif isinstance(expr, TegVar) and (expr.name, expr.uid) in not_ctx:
         return True
-    elif is_expr_parameteric(expr):
+    elif is_expr_parameteric(expr, not_ctx):
         return True
     else:
         return False
 
-
-def extract_coefficients_from_affine_tree(expr: ITeg) -> List[ITeg]:
+def extract_coefficients_from_affine_tree(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> List[ITeg]:
     if isinstance(expr, Mul):
-        children_coeffs = [ extract_coefficients_from_affine_tree(child) for child in expr.children ]
+        children_coeffs = [ extract_coefficients_from_affine_tree(child, not_ctx) for child in expr.children ]
         return combine_affine_sets(children_coeffs, op=operator.mul)
     elif isinstance(expr, Add): 
-        children_coeffs = [ extract_coefficients_from_affine_tree(child) for child in expr.children ]
+        children_coeffs = [ extract_coefficients_from_affine_tree(child, not_ctx) for child in expr.children ]
         return combine_affine_sets(children_coeffs, op=operator.add)
-    elif isinstance(expr, TegVar):
+    elif isinstance(expr, TegVar) and (expr.name, expr.uid) in not_ctx:
         return {(expr.name, expr.uid): Const(1)}
-    elif is_expr_parametric(expr):
+    elif is_expr_parametric(expr, not_ctx):
         return {('__const__', -1): expr}
     else:
         return {('__const__', -1): Const(0)}
@@ -348,7 +345,6 @@ def extract_moving_discontinuities(expr: ITeg,
     yield from (moving_cond for child in expr.children
                 for moving_cond in extract_moving_discontinuities(child, var, not_ctx, banned_variables))
 
-
 def moving_discontinuities_in_boolean(expr: ITegBool,
                                       var: Var,
                                       not_ctx: Set[Tuple[str, int]],
@@ -370,7 +366,6 @@ def moving_discontinuities_in_boolean(expr: ITegBool,
 
     else:
         raise ValueError('Illegal expression in boolean.')
-
 
 def delta_contribution(expr: Teg,
                        not_ctx: Set[Tuple[str, int]]
@@ -421,6 +416,7 @@ def rotated_delta_contribution(expr: Teg,
 
     #delta_expression = Const(0)
     delta_set = []
+    #print('not_ctx:', not_ctx)
 
     for discont_bool in extract_moving_discontinuities(expr.body, expr.dvar, not_ctx.copy(), set()):
         try:
@@ -429,10 +425,16 @@ def rotated_delta_contribution(expr: Teg,
             considered_bools.append(discont_bool)
 
             # Extract rotation.
-            raw_affine_set = extract_coefficients_from_affine_tree(discont_bool.left_expr - discont_bool.right_expr)
+            raw_affine_set = extract_coefficients_from_affine_tree(discont_bool.left_expr - discont_bool.right_expr, not_ctx)
+            
+            # Add a constant term if there isn't one.
+            if ('__const__', -1) not in raw_affine_set:
+                raw_affine_set[('__const__', -1)] = Const(0)
 
             # Extract source variables (in order).
             source_vars = [ TegVar(name = idname[0], uid = idname[1]) for idname in var_list(affine_to_linear(raw_affine_set)) ]
+            #print(source_vars)
+            #print(raw_affine_set)
 
             # Create rotated variables.
             target_vars = [ TegVar(name = f'{var.name}_') for var in source_vars ]
@@ -542,7 +544,21 @@ def fwd_deriv_transform(expr: ITeg,
                         teg_list: Set[Tuple[TegVar, ITeg, ITeg]]) -> Tuple[ITeg, Dict[Tuple[str, int], str], Set[Tuple[str, int]]]:
     """Compute the source-to-source foward derivative of the given expression."""
 
-    if isinstance(expr, (Const, TegVar, Placeholder,)):
+    if isinstance(expr, TegVar):
+        if (expr.name, expr.uid) not in not_ctx:
+            if (expr.name, expr.uid) not in ctx:
+                # Introduce derivative and leave the value unbound
+                var = Var(f'd{expr.name}')
+                ctx[(expr.name, expr.uid)] = var
+            else:
+                # Use the old derivative
+                var = ctx[(expr.name, expr.uid)]
+            expr = var
+        else:
+            expr = Const(0)
+
+
+    elif isinstance(expr, (Const, Placeholder)):
         expr = Const(0)
 
     elif isinstance(expr, (TegRemap,)):
@@ -596,7 +612,7 @@ def fwd_deriv_transform(expr: ITeg,
 
     elif isinstance(expr, Teg):
         assert expr.dvar not in ctx, f'Names of infinitesimal "{expr.dvar}" are distinct from context "{ctx}"'
-        not_ctx.discard(expr.dvar.name)
+        not_ctx.discard(expr.dvar.name) # TODO: Why is this here?
 
         # Include derivative contribution from moving boundaries of integration
         boundary_val, new_ctx, new_not_ctx = boundary_contribution(expr, ctx, not_ctx)
