@@ -1,7 +1,5 @@
-from typing import Dict, Set, List, Tuple, Iterable
-from functools import reduce, partial
-from itertools import product
-import operator
+from typing import Dict, Set, List, Tuple
+from functools import reduce
 
 from teg import (
     ITeg,
@@ -9,18 +7,8 @@ from teg import (
     Var,
     Add,
     Mul,
-    Invert,
     IfElse,
     Teg,
-    Tup,
-    LetIn,
-    TegVar,
-    SmoothFunc,
-    Ctx,
-    ITegBool,
-    Bool,
-    And,
-    Or,
     true,
     false,
 )
@@ -78,9 +66,9 @@ def solve_for_dvar(expr: ITeg, var: ITeg):
         else:
             raise ValueError(f'The expression of type "{type(expr)}" results in a computation that is not affine.')
 
-    def prod(l: List[ITeg]) -> ITeg:
+    def prod(consts: List[Const]) -> ITeg:
         # NOTE: Butchering constants...
-        return reduce(lambda x, y: x * y, [c.value for c in l], 1)
+        return reduce(lambda x, y: x * y, [c.value for c in consts], 1)
 
     # Combine all common terms in the constant vector pairs
     d, const = {}, 0
@@ -106,7 +94,6 @@ def solve_for_dvar(expr: ITeg, var: ITeg):
     for cs, v in d.values():
         inverse += Const(-prod(cs) / ck_val) * v
     return inverse
-
 
 
 def delta_contribution(expr: Teg,
@@ -140,4 +127,3 @@ def delta_contribution(expr: Teg,
             moving_var_data.append((moving_var_delta, expr_for_dvar))
 
     return moving_var_data
-

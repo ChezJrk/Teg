@@ -1,7 +1,6 @@
 from typing import Set, Tuple, Iterable, Optional
 from collections import defaultdict
 from functools import reduce
-import time
 import operator
 
 from teg import (
@@ -83,12 +82,12 @@ def reverse_deriv_transform(expr: ITeg,
 
         for delta in delta_set:
             delta_expr, distance_to_delta, remapping = delta
-            # print(f"DERIV: {distance_to_delta}")
-            delta_deriv_parts = [(name_uid, deriv_expr) for name_uid, deriv_expr in reverse_deriv_transform(distance_to_delta, Const(1), not_ctx, teg_list)]
+            deriv_dist_to_delta = reverse_deriv_transform(distance_to_delta, Const(1), not_ctx, teg_list)
+            delta_deriv_parts = [(name_uid, deriv_expr) for name_uid, deriv_expr in deriv_dist_to_delta]
 
             delta_deriv_dict = {}
             for i in delta_deriv_parts:
-                delta_deriv_dict.setdefault(i[0],[]).append(i[1])
+                delta_deriv_dict.setdefault(i[0], []).append(i[1])
         
             delta_deriv_list = []
             for (uid, exprs) in delta_deriv_dict.items():
@@ -96,8 +95,11 @@ def reverse_deriv_transform(expr: ITeg,
 
             yield from delta_deriv_list
 
-        deriv_body_traces = reverse_deriv_transform(expr.body, Const(1), 
-                                            not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
+        deriv_body_traces = reverse_deriv_transform(expr.body,
+                                                    Const(1),
+                                                    not_ctx,
+                                                    teg_list | {(expr.dvar, expr.lower, expr.upper)})
+
         yield from ((name_uid, out_deriv_vals * Teg(expr.lower, expr.upper, deriv_body, expr.dvar))
                     for name_uid, deriv_body in deriv_body_traces)
 
@@ -115,7 +117,6 @@ def reverse_deriv_transform(expr: ITeg,
 
         # Thread through derivatives of each subexpression
         for (name, uid), dname_expr in reverse_deriv_transform(expr.expr, out_deriv_vals, not_ctx, teg_list):
-            #print("LetIn body deriv: ", (name, uid))
             dvar_with_ctx = LetIn(expr.new_vars, expr.new_exprs, dname_expr)
             if name in dnew_vars:
                 yield from ((n, d * dvar_with_ctx) for n, d in body_derivs[name])

@@ -1,4 +1,4 @@
-from typing import Optional, List, Set, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 import operator
 import numpy as np
 
@@ -25,8 +25,10 @@ class ITeg:
         for child in self.children:
             child.bind_variable(var, value)
 
+
 class PiecewiseAffine(ITeg):
     pass
+
 
 class Var(PiecewiseAffine):
     global_uid = 0
@@ -45,6 +47,7 @@ class Var(PiecewiseAffine):
         if (self.name, self.uid) == (var.name, var.uid):
             self.value = value
 
+
 class Const(Var):
 
     def __init__(self, value: Optional[float], name: str = ''):
@@ -60,23 +63,23 @@ class SmoothFunc(ITeg):
         SmoothFunc is an abstract class that children must implement.
     """
     def __init__(self, expr: ITeg, name: str = 'SmoothFunc'):
-        super(SmoothFunc, self).__init__(children = [expr])
+        super(SmoothFunc, self).__init__(children=[expr])
         self.expr = expr
         self.name = name
 
     def fwd_deriv(self, in_deriv_expr: ITeg) -> ITeg:
-        raise NotImplemented()
+        raise NotImplementedError
 
     def rev_deriv(self, out_deriv_expr: ITeg) -> ITeg:
-        raise NotImplemented()
+        raise NotImplementedError
 
     def operation(self, in_value):
-        raise NotImplemented() 
+        raise NotImplementedError
 
 
 class TegVar(Var):
     def __init__(self, name: str = '', uid: Optional[int] = None):
-        super(TegVar, self).__init__(name=name, uid = uid)
+        super(TegVar, self).__init__(name=name, uid=uid)
 
     def bind_variable(self, var: Var, value: Optional[float] = None) -> None:
         if (self.name, self.uid) == (var.name, var.uid):
