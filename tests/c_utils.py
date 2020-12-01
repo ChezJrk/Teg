@@ -47,7 +47,7 @@ def compileProgram(program, silent=True):
     cppfile.write(all_code)
     cppfile.close()
 
-    proc = subprocess.Popen("g++ /tmp/_teg_cpp_out.cpp -o /tmp/_teg_cpp_out -O3", stdout=subprocess.PIPE, shell=True)
+    proc = subprocess.Popen("g++ -std=c++11 /tmp/_teg_cpp_out.cpp -o /tmp/_teg_cpp_out -O3", stdout=subprocess.PIPE, shell=True)
     (out, err) = proc.communicate()
 
     if err is not None:
