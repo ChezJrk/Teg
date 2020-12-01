@@ -401,15 +401,15 @@ class CEmitter:
 
         all_decls = reduce(operator.add, decl_list)
 
-        args = { var.name : var for var in in_code.ctx.all_unused_vars() }
+        args = {var.name: var for var in in_code.ctx.all_unused_vars()}
 
         # print(args.keys())
 
         for name in arglist:
             assert name in args.keys(), f'Couldn\'t find argument symbol "{name}" in the computation tree'
 
-        full_arglist = [ args[name] for name in arglist ]
-        full_arglist = full_arglist + [ args[name] for name in args.keys() if name not in arglist ]
+        full_arglist = [args[name] for name in arglist]
+        full_arglist = full_arglist + [args[name] for name in args.keys() if name not in arglist]
 
         # Build function argument string.
         # Don't use __str__ for variables.
@@ -435,7 +435,7 @@ class CEmitter:
         if in_code.out_var.size > 1:
             result_struct = f'{decl_type_string} struct {result_type}{{ {in_code.out_var.ctype} o[{in_code.out_var.size}]; }};'
             inner_assign_statement = "".join([f"{in_code.out_var.name}[{i}]," for i in range(in_code.out_var.size)])[:-1]
-            return_statement = f'return {result_type}{{ {{ {inner_assign_statement} }} }};'
+            return_statement = f'return {result_type}{{ {inner_assign_statement} }};'
         else:
             result_struct = f'typedef {in_code.out_var.ctype} {result_type};'
             return_statement = f'return {in_code.out_var.name};'
@@ -443,25 +443,25 @@ class CEmitter:
         method_decorator_string = '__device__' if self.device_code else ''
         # Build the method code with all the declarations.
         method_code = C_Method(method_name,
-                                f'{result_struct}\n' +
-                                f'{method_decorator_string} ' +
-                                f'{result_type} ' +
-                                f'{method_name} ({argstring}){{' + 
-                                f'\n{all_decls.code}\n{in_code.code}\n' +
-                                f'{return_statement}}}', 
-                                arglist,
-                                in_code.out_var.ctype,
-                                in_code.out_var.size
-                            )
+                               f'{result_struct}\n' +
+                               f'{method_decorator_string} ' +
+                               f'{result_type} ' +
+                               f'{method_name} ({argstring}){{' + 
+                               f'\n{all_decls.code}\n{in_code.code}\n' +
+                               f'{return_statement}}}', 
+                               arglist,
+                               in_code.out_var.ctype,
+                               in_code.out_var.size
+                               )
         return method_code
 
     # Pretty sure this shouldn't refer to 'smooth'.
     # Handle all of this when rewriting these passes.
-    def smooth_func(self, code1, out_var = None, op = None):
+    def smooth_func(self, code1, out_var=None, op=None):
         output_size = code1.out_var.size
         output_type = code1.out_var.ctype
 
-        output = self.variable(ctype = output_type, size = output_size).out_var
+        output = self.variable(ctype=output_type, size=output_size).out_var
         output.require_decl()
 
         instr_generator = FUNC_MAPPING[op]
@@ -502,7 +502,7 @@ class CEmitter:
                 code2_access = f'{code2.out_var.name}'
             else:
                 code2_access = f'{code2.out_var.name}[_iter_]'
-            
+
             return code1 + code2 + C_SSACode(output, 
                 f'for (uint32_t _iter_ = 0; _iter_ < {output.size}; _iter_++) ' + \
                 f'{output.name}[_iter_] = {code1_access} {op} {code2_access};'

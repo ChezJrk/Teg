@@ -1,17 +1,20 @@
 """
 
 """
-class Symbol:
-    def __init__(self, name = None, ctype = None):
-        self.name = name
-        self.ctype = ctype
+
+
+class IR_Variable:
+    def __init__(self, ir_type=None, label=None):
+        # Generate name.
+        self.name = 'a'
         pass
 
-class Variable:
-    def __init__(self, name = None, ctype = None):
-        self.name = name
-        self.ctype = ctype
-        pass
+    def name(self):
+        return self.name
+
+    def ctype(self):
+        return self.ctype
+
 
 def infer_const_type(v):
     if type(v) in [float, int]:
@@ -19,10 +22,10 @@ def infer_const_type(v):
     else:
         assert False, f'Couldn\'t match constant type'
 
-class Constant:
-    def __init__(self, name = None, val = None, ctype = None):
-        self.name = name
-        self.ctype = infer_const_type(val) if ctype else val
+
+class IR_Literal:
+    def __init__(self, val=None):
         self.val = val
-        
-        pass
+
+    def value():
+        return self.val

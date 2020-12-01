@@ -1,5 +1,4 @@
-from typing import Dict, Set, List, Tuple, Iterable
-from functools import reduce, partial
+from typing import Dict, Set, Tuple, Iterable
 
 from teg import (
     ITeg,
@@ -43,7 +42,7 @@ def extract_moving_discontinuities(expr: ITeg,
                                    var: Var,
                                    not_ctx: Set[Tuple[str, int]],
                                    banned_variables: Set[Tuple[(str, int)]]) -> Iterable[Tuple[ITeg, ITeg]]:
-    """ 
+    """
         Identify all subexpressions producing a moving discontinuity.
         Concretely, this means finding each branching statement including
         the integration variable and a variable defined in an outside context.
