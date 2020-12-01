@@ -6,20 +6,12 @@ from teg import (
     Var,
     Add,
     Mul,
-    Invert,
     IfElse,
     Teg,
-    Tup,
-    LetIn,
-    TegVar,
-    SmoothFunc,
-    Ctx,
     ITegBool,
     Bool,
     And,
     Or,
-    true,
-    false,
 )
 
 

@@ -1,4 +1,4 @@
-from typing import Dict, Set, List, Tuple, Iterable
+from typing import Dict, Set, List, Tuple
 from functools import reduce, partial
 from itertools import product
 import operator
@@ -12,15 +12,8 @@ from teg import (
     Invert,
     IfElse,
     Teg,
-    Tup,
     LetIn,
     TegVar,
-    SmoothFunc,
-    Ctx,
-    ITegBool,
-    Bool,
-    And,
-    Or,
     true,
     false,
 )
@@ -82,7 +75,7 @@ def combine_affine_sets(affine_lists: List[Dict[Tuple[str, int], ITeg]], op):
                     combined_set[variable] = expr
 
     else:
-        raise ValueError(f'Operation not supported')
+        raise ValueError('Operation not supported')
 
     return combined_set
 
@@ -95,18 +88,18 @@ def is_expr_parametric(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> bool:
     else:
         return True
 
-    return reduce([ is_expr_parametric(child, not_ctx) for child in expr.children ], operator.and_)
+    return reduce([is_expr_parametric(child, not_ctx) for child in expr.children], operator.and_)
 
 
 def check_affine_tree(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> bool:
     if isinstance(expr, Mul):
-        cvals = [ is_expr_parameteric(child, not_ctx) for child in expr.children ]
+        cvals = [is_expr_parametric(child, not_ctx) for child in expr.children]
         return (cvals.count(False) == 1) and check_affine_tree(expr.children[cvals.index(False)])
     elif isinstance(expr, Add): 
-        return reduce([ check_affine_tree(child, not_ctx) for child in expr.children ], operator.and_)
+        return reduce([check_affine_tree(child, not_ctx) for child in expr.children], operator.and_)
     elif isinstance(expr, TegVar) and (expr.name, expr.uid) in not_ctx:
         return True
-    elif is_expr_parameteric(expr, not_ctx):
+    elif is_expr_parametric(expr, not_ctx):
         return True
     else:
         return False
@@ -114,10 +107,10 @@ def check_affine_tree(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> bool:
 
 def extract_coefficients_from_affine_tree(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> List[ITeg]:
     if isinstance(expr, Mul):
-        children_coeffs = [ extract_coefficients_from_affine_tree(child, not_ctx) for child in expr.children ]
+        children_coeffs = [extract_coefficients_from_affine_tree(child, not_ctx) for child in expr.children]
         return combine_affine_sets(children_coeffs, op=operator.mul)
-    elif isinstance(expr, Add): 
-        children_coeffs = [ extract_coefficients_from_affine_tree(child, not_ctx) for child in expr.children ]
+    elif isinstance(expr, Add):
+        children_coeffs = [extract_coefficients_from_affine_tree(child, not_ctx) for child in expr.children]
         return combine_affine_sets(children_coeffs, op=operator.add)
     elif isinstance(expr, TegVar) and (expr.name, expr.uid) in not_ctx:
         return {(expr.name, expr.uid): Const(1)}
@@ -156,19 +149,18 @@ def negate_degenerate_coeffs(affine_set: Dict[Tuple[str, int], ITeg], source_var
         degenerate conditions. Since coeffcients are not known in advance, this
         must be done using Teg instructions.
     """
-    num_vars = len(source_vars)
     exprs = [affine_set[(s_var.name, s_var.uid)] for s_var in source_vars]
 
     flip_condition = exprs[0] < 0
 
-    robust_affine_set = dict([ (var, IfElse(flip_condition, -coeff, coeff)) for (var, coeff) in affine_set.items()])
+    robust_affine_set = dict([(var, IfElse(flip_condition, -coeff, coeff)) for (var, coeff) in affine_set.items()])
 
     return robust_affine_set, flip_condition
 
 
 def rotate_to_target(linear_set: Dict[Tuple[str, int], ITeg], 
-                     target_index: int, 
-                     target_vars: List[TegVar], 
+                     target_index: int,
+                     target_vars: List[TegVar],
                      source_vars: List[TegVar]):
 
     num_vars = len(source_vars)
@@ -261,11 +253,9 @@ def rotated_delta_contribution(expr: Teg,
     """Given an expression for the integral, generate an expression for the derivative of jump discontinuities. """
 
     # Descends into all subexpressions extracting moving discontinuities
-    moving_var_data, considered_bools = [], []
+    considered_bools = []
 
-    #delta_expression = Const(0)
     delta_set = []
-    #print('not_ctx:', not_ctx)
 
     for discont_bool in extract_moving_discontinuities(expr.body, expr.dvar, not_ctx.copy(), set()):
         try:
@@ -275,21 +265,19 @@ def rotated_delta_contribution(expr: Teg,
 
             # Extract rotation.
             raw_affine_set = extract_coefficients_from_affine_tree(discont_bool.left_expr - discont_bool.right_expr, not_ctx)
-            
+
             # Add a constant term if there isn't one.
             if ('__const__', -1) not in raw_affine_set:
                 raw_affine_set[('__const__', -1)] = Const(0)
 
             # Extract source variables (in order).
-            source_vars = [ TegVar(name = idname[0], uid = idname[1]) for idname in var_list(affine_to_linear(raw_affine_set)) ]
-            #print(source_vars)
-            #print(raw_affine_set)
+            source_vars = [TegVar(name=idname[0], uid=idname[1]) for idname in var_list(affine_to_linear(raw_affine_set))]
 
             # Create rotated variables.
-            target_vars = [ TegVar(name = f'{var.name}_') for var in source_vars ]
+            target_vars = [TegVar(name=f'{var.name}_') for var in source_vars]
 
             # Identify innermost TegVar.
-            dvar_idx = source_vars.index(TegVar(name = expr.dvar.name, uid = expr.dvar.uid))
+            dvar_idx = source_vars.index(TegVar(name=expr.dvar.name, uid=expr.dvar.uid))
 
             # Move this TegVar to position 0
             source_vars = [source_vars[dvar_idx]] + source_vars[:dvar_idx] + source_vars[dvar_idx + 1:]
@@ -299,20 +287,20 @@ def rotated_delta_contribution(expr: Teg,
             linear_set = affine_to_linear(affine_set)
             normalized_set, normalization_var, normalization_expr = normalize_linear_set(linear_set)
 
-            num_tegvars = len(linear_set)
-
             # Evaluate the discontinuity at x = t+
             # TODO: Rewrite so it works for a general reparameterization.
             dvar = target_vars[0]
-            #expr_for_dvar = - constant_coefficient(affine_set) / normalization
             expr_for_dvar = - constant_coefficient(affine_set) * normalization_var
 
             # Computed rotated expressions.
-            rotated_exprs = dict([((var.name, var.uid), substitute(rotate_to_source(normalized_set, 
-                                        source_index = idx,
-                                        target_vars = target_vars,
-                                        source_vars = source_vars), dvar, expr_for_dvar))
-                                    for idx, var in enumerate(source_vars)])
+            rotated_exprs = dict([((var.name, var.uid),
+                                  substitute(rotate_to_source(normalized_set,
+                                             source_index=idx,
+                                             target_vars=target_vars,
+                                             source_vars=source_vars),
+                                             dvar,
+                                             expr_for_dvar))
+                                  for idx, var in enumerate(source_vars)])
 
             expr_body_right = expr.body
             expr_body_right = substitute(expr_body_right, discont_bool, false)
@@ -325,21 +313,24 @@ def rotated_delta_contribution(expr: Teg,
             expr_body_left_tx = transform_expr(expr_body_left, rotated_exprs)
             expr_body_left_tx = substitute(expr_body_left_tx, dvar, expr_for_dvar)
 
-            # if lower < dvar < upper, include the contribution from the discontinuity (x=t+ - x=t-)
             lower_expr_tx = transform_expr(expr.lower, rotated_exprs)
             upper_expr_tx = transform_expr(expr.upper, rotated_exprs)
-            dvar_tx = rotate_to_source(normalized_set, source_index = 0, 
-                                                       target_vars = target_vars, 
-                                                       source_vars = source_vars)
+            dvar_tx = rotate_to_source(normalized_set,
+                                       source_index=0,
+                                       target_vars=target_vars,
+                                       source_vars=source_vars)
 
+            # if trasformed_lower < transformed_dvar < transformed_upper,
+            # then include the contribution from the discontinuity
             discontinuity_happens = (lower_expr_tx < dvar_tx) & (dvar_tx < upper_expr_tx)
             discontinuity_happens = substitute(discontinuity_happens, dvar, expr_for_dvar)
             moving_var_delta = IfElse(discontinuity_happens, expr_body_left_tx - expr_body_right_tx, Const(0))
 
-            distance_to_delta = -(rotate_to_target(normalized_set, target_index = 0, 
-                                             target_vars = target_vars,
-                                             source_vars = source_vars) - \
-                                             expr_for_dvar)
+            distance_to_delta = -(rotate_to_target(normalized_set,
+                                                   target_index=0,
+                                                   target_vars=target_vars,
+                                                   source_vars=source_vars)
+                                  - expr_for_dvar)
 
             duplicate_norm_var = Var('__norm_i__')
             distance_to_delta = IfElse(flip_condition, -distance_to_delta, distance_to_delta)
