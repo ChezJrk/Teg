@@ -1,4 +1,4 @@
-from typing import Optional, Set, Dict, Tuple
+from typing import Set, Dict, Tuple
 from .integrable_program import (
     ITeg,
     Var,
@@ -7,22 +7,14 @@ from .integrable_program import (
 
 
 class Placeholder(Var):
-    """
-        Replaceable tag.
-    """
+    """Replaceable tag. """
     def __init__(self, name: str = '', signature: str = ''):
         super(Placeholder, self).__init__(name=name)
         self.signature = signature
 
-    def bind_variable(self, var: Var, value: Optional[float] = None) -> None:
-        if (self.name, self.uid) == (var.name, var.uid):
-            self.value = value
-
 
 class TegRemap(ITeg):
-    """
-        Intermediate element that holds a variable remapping as well as target expressions.
-    """
+    """Intermediate element that holds a variable remapping as well as target expressions. """
     def __init__(self,
                  expr: ITeg,
                  map: Dict[Tuple[str, int], Tuple[str, int]],
