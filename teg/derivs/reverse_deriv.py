@@ -28,13 +28,14 @@ def cache(f):
     cache = {}
 
     def wrapper_f(expr, out_deriv_vals, not_ctx, teg_list):
-        if expr not in cache:
-            cache[expr] = list(f(expr, out_deriv_vals, not_ctx, teg_list))
-        return cache[expr]
+        k = (expr, out_deriv_vals)
+        if k not in cache:
+            cache[k] = list(f(expr, out_deriv_vals, not_ctx, teg_list))
+        return cache[k]
     return wrapper_f
 
 
-# @cache
+@cache
 def reverse_deriv_transform(expr: ITeg,
                             out_deriv_vals: Tuple,
                             not_ctx: Set[Tuple[str, int]],
