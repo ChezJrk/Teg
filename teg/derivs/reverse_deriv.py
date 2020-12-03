@@ -24,6 +24,18 @@ from teg.passes.remap import remap, is_remappable
 from .edge.rotated import rotated_delta_contribution
 
 
+def cache(f):
+    cache = {}
+
+    def wrapper_f(expr, out_deriv_vals, not_ctx, teg_list):
+        if expr not in cache:
+            cache[expr] = list(f(expr, out_deriv_vals, not_ctx, teg_list))
+        return cache[expr]
+
+    return wrapper_f
+
+
+@cache
 def reverse_deriv_transform(expr: ITeg,
                             out_deriv_vals: Tuple,
                             not_ctx: Set[Tuple[str, int]],
