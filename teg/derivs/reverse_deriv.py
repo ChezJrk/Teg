@@ -28,6 +28,11 @@ def cache(f):
     cache = {}
 
     def wrapper_f(expr, out_deriv_vals, not_ctx, teg_list):
+        # Note: it may be better to just cache on expr and then
+        # have cache[k] = list(f(expr, [1, 1, ... , 1, 1], not_ctx, teg_list))
+        # and then out_deriva_vals * cache[k]
+        # I believe this is a more effective caching machanism
+
         k = (expr, out_deriv_vals)
         if k not in cache:
             cache[k] = list(f(expr, out_deriv_vals, not_ctx, teg_list))
