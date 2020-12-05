@@ -995,6 +995,34 @@ class MathFunctionsTest(TestCase):
             self.assertAlmostEqual(evaluate(integral, num_samples=100, fast_eval=False, ignore_cache=True),
                                    (x_val ** 3 / 3), places=2)
 
+    def test_sqr_backends(self):
+        x, y = TegVar('x'), TegVar('y')
+        theta = Var('theta', 0)
+        body = Sqr(x - theta)
+
+        for x_val in [0, 0.5, 1, 1.5]:
+            integral = Teg(self.zero, self.one, Teg(self.zero, x_val, body, x), y)
+            compare_eval_methods(self, integral, places=2)
+
+    def test_sqrt(self):
+        x, y = TegVar('x'), TegVar('y')
+        theta = Var('theta', 0)
+        body = Sqrt(x - theta)
+
+        for x_val in [0, 0.5, 1, 1.5]:
+            integral = Teg(self.zero, self.one, Teg(self.zero, x_val, body, x), y)
+            self.assertAlmostEqual(evaluate(integral, num_samples=100, fast_eval=False, ignore_cache=True),
+                                   (x_val ** (1.5) / 1.5), places=2)
+
+    def test_sqrt_backends(self):
+        x, y = TegVar('x'), TegVar('y')
+        theta = Var('theta', 0)
+        body = Sqrt(x - theta)
+
+        for x_val in [0, 0.5, 1, 1.5]:
+            integral = Teg(self.zero, self.one, Teg(self.zero, x_val, body, x), y)
+            compare_eval_methods(self, integral, places=2)
+
 
 if __name__ == '__main__':
     unittest.main()
