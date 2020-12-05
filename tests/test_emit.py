@@ -744,5 +744,6 @@ class AffineConditionsTest(TestCase):
         deriv_integral = FwdDeriv(integral, [(t1, 0), (t2, 1)])
         self.assertAlmostEqual(evaluate(simplify(deriv_integral)), 1.5)
 
+
 if __name__ == '__main__':
     unittest.main()

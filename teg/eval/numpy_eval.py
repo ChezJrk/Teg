@@ -34,7 +34,7 @@ def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
         expr.value = expr.operation(*[evaluate(e, num_samples, ignore_cache) for e in expr.children])
 
     elif isinstance(expr, SmoothFunc):
-        expr.value = expr.operation(evaluate(expr.expr))
+        expr.value = expr.operation(evaluate(expr.expr, num_samples, ignore_cache))
 
     elif isinstance(expr, Invert):
         expr.value = 1 / evaluate(expr.child, num_samples, ignore_cache)

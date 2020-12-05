@@ -67,7 +67,7 @@ def remap(expr: ITeg):
 
     expr = substitute(expr, remap_expr, Const(0))
 
-    # Find normalization if it exists.
+    # Find normalization if it exists. TODO: This is hacky.. fix later
     normalization_map = [(r_var, r_expr) for r_var, r_expr in remap_expr.exprs.items() if r_var[0] == '__norm__']
 
     var_list = [Var(name=name, uid=uid) for (name, uid) in remap_expr.exprs.keys() if name != '__norm__']
@@ -88,11 +88,11 @@ def remap(expr: ITeg):
     # Resolve any placeholders due to Teg bounds.
     for tegvar, lower, upper in remap_expr.source_bounds:
         new_expr = resolve_placeholders(new_expr,
-                        {
-                            f'{tegvar.uid}_ub': upper,
-                            f'{tegvar.uid}_lb': lower
-                        }
-                )
+                                        {
+                                            f'{tegvar.uid}_ub': upper,
+                                            f'{tegvar.uid}_lb': lower
+                                        }
+                                        )
 
     expr = expr + new_expr
     return expr
@@ -168,8 +168,8 @@ def remap_gather(expr: ITeg):
 
         if remap_expr is not None:
             return (remap_expr,
-                Invert(remapped_tree),
-                teg_list)
+                    Invert(remapped_tree),
+                    teg_list)
         else:
             return (None, None, [])
 
@@ -180,7 +180,7 @@ def remap_gather(expr: ITeg):
                 continue
 
             # Retain the 'mul' operation, but replace this child with the pruned tree 'remapped_tree'
-            return (remap_expr, 
+            return (remap_expr,
                     Tup(expr.children[:index] + [remapped_tree] + expr.children[index + 1:]),
                     teg_list)
         return None, None, []
@@ -193,7 +193,7 @@ def remap_gather(expr: ITeg):
         remap_expr, remapped_tree, teg_list = remap_gather(expr.right_expr)
         if remap_expr is not None:
             return remap_expr, type(expr)(expr.left_expr, remapped_tree), teg_list
-        
+
         return None, None, []
 
     elif isinstance(expr, IfElse):

@@ -14,6 +14,8 @@ from teg import (
     LetIn,
 )
 
+from teg.math import Sqr, Sqrt
+
 from teg.derivs import FwdDeriv, RevDeriv
 from teg.ir import emit
 from teg.passes.simplify import simplify
@@ -976,6 +978,22 @@ class FastEvalTest(TestCase):
         t = Var('t', 1)
         integral = LetIn([t], [Const(1)], t * Teg(self.zero, self.one, LetIn([t], [Const(1)], Tup(x*t, 2*x*t)), x))
         compare_eval_methods(self, integral, places=2)
+
+
+class MathFunctionsTest(TestCase):
+
+    def setUp(self):
+        self.zero, self.one = Const(0), Const(1)
+
+    def test_sqr(self):
+        x, y = TegVar('x'), TegVar('y')
+        theta = Var('theta', 0)
+        body = Sqr(x - theta)
+
+        for x_val in [0, 0.5, 1, 1.5]:
+            integral = Teg(self.zero, self.one, Teg(self.zero, x_val, body, x), y)
+            self.assertAlmostEqual(evaluate(integral, num_samples=100, fast_eval=False, ignore_cache=True),
+                                   (x_val ** 3 / 3), places=2)
 
 
 if __name__ == '__main__':

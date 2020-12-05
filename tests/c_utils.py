@@ -55,4 +55,4 @@ def compileProgram(program, silent=True):
         print(f'Error: {err}')
         print(f'Output: {out}')
 
-    return '/tmp/_teg_cpp_out', out_size
+    return filename, out_size

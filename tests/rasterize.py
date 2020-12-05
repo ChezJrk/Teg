@@ -11,9 +11,9 @@ from integrable_program import (
     Tup,
     LetIn,
 )
-from derivs import FwdDeriv
-from evaluate import evaluate
-from simplify import simplify
+from teg.derivs import FwdDeriv
+from teg.eval import numpy_eval as evaluate
+from teg.passes.simplify import simplify
 from tap import Tap
 
 
@@ -29,7 +29,7 @@ def rasterize_triangles():
 
     def right_triangle(x0, y0):
         """ ◥ with upper right corner at (x0, y0) """
-        return (y < y0) & (x < x0) & (x - x0 + y - y0 + 0.75 + theta > 0)
+        return (y < y0) & (x < x0 + theta) & (x - x0 + y - y0 + 0.75 + theta > 0)
 
     inside_front_cond = right_triangle(0.7, 0.7)
 
