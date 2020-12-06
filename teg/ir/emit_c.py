@@ -116,7 +116,7 @@ class VarContext:
         return res
 
     def __str__(self):
-        pstr = "VarContext{\n" 
+        pstr = "VarContext{\n"
         for k in self.vars:
             pstr += str(self.vars[k]) + "\n"
         pstr += "}"
@@ -216,7 +216,7 @@ class CEmitter:
     def variable(self, varname: str = None, ctype: str = None, size: int = None, assigned: bool = False, default=None):
         if varname is not None:
             # Make named variable with specific type.
-            assert (ctype is not None) and (size is not None), f'For named variables, a type must be provided.'
+            assert (ctype is not None) and (size is not None), 'For named variables, a type must be provided.'
             out_ssavar = C_SSAVar(varname,
                                   ctype=ctype,
                                   size=size,
@@ -234,7 +234,7 @@ class CEmitter:
             return C_SSACode(out_ssavar, None)
 
     def aggregate(self, index_var, lower_code, upper_code, num_code, bind_var, loop_code):
-        # Aggregation primitive. Provides additional options for languages where fast 
+        # Aggregation primitive. Provides additional options for languages where fast
         # aggregation mechanisms exist. For C, it's the same as using a loop
         agg_code = lower_code + upper_code + num_code
 
@@ -242,39 +242,39 @@ class CEmitter:
         index_var.set_type('int', 1)
         index_var.require_decl()
 
-        assert bind_var.size == 1, f'Bound aggregation variable must be a scalar'
+        assert bind_var.size == 1, 'Bound aggregation variable must be a scalar'
 
-        step_size = self.variable(assigned = True, ctype=self.float_type, size=1)
-        agg_var = self.variable(assigned = True, default = 0).out_var
+        step_size = self.variable(assigned=True, ctype=self.float_type, size=1)
+        agg_var = self.variable(assigned=True, default=0).out_var
 
         step_size.out_var.require_decl()
         bind_var.require_decl()
 
         # Manually add in additional instructions to aggregate information.
         loop_block = self.block(
-                    C_SSACode(step_size.out_var, 
-                            f'{step_size.out_var.name} = ({upper_code.out_var.name} - {lower_code.out_var.name}) / ({num_code.out_var.name});') +
-                    C_SSACode(bind_var, 
-                            f'{bind_var.name} = {lower_code.out_var.name} + {step_size.out_var.name} * ({index_var.name} + 0.5f);') +
+                    C_SSACode(step_size.out_var, f'{step_size.out_var.name} = ({upper_code.out_var.name}'
+                                                 f' - {lower_code.out_var.name}) / ({num_code.out_var.name});') +
+                    C_SSACode(bind_var, f'{bind_var.name} = {lower_code.out_var.name} + {step_size.out_var.name}'
+                                        f' * ({index_var.name} + 0.5f);') +
                     self.assign(
-                        agg_var, 
+                        agg_var,
                         self.mul(
                             self.variable(
-                                step_size.out_var.name, 
-                                ctype = step_size.out_var.ctype,
-                                size = step_size.out_var.size
-                            ), 
+                                step_size.out_var.name,
+                                ctype=step_size.out_var.ctype,
+                                size=step_size.out_var.size
+                            ),
                             loop_code),
-                        op = '+='
-                    ) 
+                        op='+='
+                    )
                 )
 
         ctx = loop_block.ctx
         ctx.put_var(index_var)
         return agg_code + C_SSACode(loop_block.out_var,
-                    f'for({index_var.name} = 0;' +
-                        f'{index_var.name} < {num_code.out_var.name};' +
-                        f'{index_var.name}++){loop_block.code}', ctx = ctx)
+                                    f'for({index_var.name} = 0;' +
+                                    f'{index_var.name} < {num_code.out_var.name};' +
+                                    f'{index_var.name}++){loop_block.code}', ctx= ctx)
 
     def assign(self, out_var, code, op = "="):
 
@@ -290,14 +290,13 @@ class CEmitter:
             return code + C_SSACode(out_ssavar, f'{out_ssavar.name} {op} {code.out_var.name};')
         else:
             if code.out_var.size == 1:
-                return code + C_SSACode(out_ssavar, 
-                            f'for (uint32_t _iter_ = 0; _iter_ < {out_ssavar.size}; _iter_++) ' + \
-                            f'{out_ssavar.name}[_iter_] {op} {code.out_var.name};')
+                return code + C_SSACode(out_ssavar,
+                                        f'for (uint32_t _iter_ = 0; _iter_ < {out_ssavar.size}; _iter_++) '
+                                        f'{out_ssavar.name}[_iter_] {op} {code.out_var.name};')
             else:
-                return code + C_SSACode(out_ssavar, 
-                            f'for (uint32_t _iter_ = 0; _iter_ < {out_ssavar.size}; _iter_++) ' + \
-                            f'{out_ssavar.name}[_iter_] {op} {code.out_var.name}[_iter_];')
-
+                return code + C_SSACode(out_ssavar,
+                                        f'for (uint32_t _iter_ = 0; _iter_ < {out_ssavar.size}; _iter_++) '
+                                        f'{out_ssavar.name}[_iter_] {op} {code.out_var.name}[_iter_];')
 
     def array_assign(self, out_var, code_list):
 
@@ -305,38 +304,35 @@ class CEmitter:
             assert code.out_var.size == 1, f'Nested tuples cannot be emitted: {code.out_var.name}'
 
         for code1, code2 in zip(code_list[1:], code_list[:-1]):
-            assert code1.out_var.ctype == code2.out_var.ctype, f'Elements in a tuple assignment must be of same type: {code1.out_var.ctype}, {code2.out_var.ctype}'
+            assert code1.out_var.ctype == code2.out_var.ctype, \
+                   f'Elements in a tuple assignment must be of same type: {code1.out_var.ctype}, {code2.out_var.ctype}'
 
         out_ssavar = out_var
         out_ssavar.require_decl()
 
         out_var.set_type(code1.out_var.ctype, len(code_list))
+        code = C_SSACode(out_ssavar, ''.join(f'{out_ssavar.name}[{idx}] = {code.out_var.name};\n'
+                                             for idx, code in enumerate(code_list)))
+        return reduce(operator.add, code_list) + code
 
-        return reduce(operator.add, code_list) + C_SSACode(out_ssavar,
-                        ''.join([f'{out_ssavar.name}[{idx}] = {code.out_var.name};\n' for idx, code in enumerate(code_list)])
-                        )
-
-    def condition(self, cond, if_body, else_body, out_var = None):
+    def condition(self, cond, if_body, else_body, out_var=None):
         # TODO: Temporary assertion while refactoring code.
         assert out_var is None
 
         # Infer type.
         output_size = project_sizes(if_body.out_var.size, else_body.out_var.size)
         output_type = if_body.out_var.ctype
-        assert if_body.out_var.ctype == else_body.out_var.ctype, f'Condition branches have different output types'
+        assert if_body.out_var.ctype == else_body.out_var.ctype, 'Condition branches have different output types'
 
-        out_var = self.variable(ctype = output_type, size = output_size).out_var
+        out_var = self.variable(ctype=output_type, size=output_size).out_var
 
         # Make block code.
         if_block = self.block(self.assign(out_var, if_body))
         else_block = self.block(self.assign(out_var, else_body))
 
-        return cond + \
-            C_SSACode(out_var, 
-                f'if ({cond.out_var.name})\n{if_block.code} \
-                else \n{else_block.code}',
-                ctx = if_block.ctx + else_block.ctx
-            )
+        return cond + C_SSACode(out_var,
+                                f'if ({cond.out_var.name})\n{if_block.code} else \n{else_block.code}',
+                                ctx=if_block.ctx + else_block.ctx)
 
     def block(self, in_code):
         # Get a list of all free variables that appear on the LHS.

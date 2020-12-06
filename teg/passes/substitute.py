@@ -13,13 +13,9 @@ from teg import (
     SmoothFunc,
     TegVar,
     TegRemap,
-    Ctx,
-    ITegBool,
     Bool,
     And,
     Or,
-    true,
-    false,
 )
 
 
@@ -37,12 +33,12 @@ def substitute(expr: ITeg, this_expr: ITeg, that_expr: ITeg) -> ITeg:
 
     elif isinstance(expr, TegRemap):
         return TegRemap(
-                        map = expr.map,
-                        expr = substitute(expr.expr, this_expr, that_expr),
-                        exprs = dict([(var, substitute(e, this_expr, that_expr)) for var, e in expr.exprs.items()]),
-                        lower_bounds = dict([(var, substitute(e, this_expr, that_expr)) for var, e in expr.lower_bounds.items()]),
-                        upper_bounds = dict([(var, substitute(e, this_expr, that_expr)) for var, e in expr.upper_bounds.items()]),
-                        source_bounds = expr.source_bounds
+                        map=expr.map,
+                        expr=substitute(expr.expr, this_expr, that_expr),
+                        exprs={var: substitute(e, this_expr, that_expr) for var, e in expr.exprs.items()},
+                        lower_bounds={var: substitute(e, this_expr, that_expr) for var, e in expr.lower_bounds.items()},
+                        upper_bounds={var: substitute(e, this_expr, that_expr) for var, e in expr.upper_bounds.items()},
+                        source_bounds=expr.source_bounds
                     )
 
     elif isinstance(expr, Add):
@@ -71,12 +67,10 @@ def substitute(expr: ITeg, this_expr: ITeg, that_expr: ITeg) -> ITeg:
         # Ignore shadowed variables
         if expr.dvar == this_expr:
             return expr
-        return Teg(
-                    substitute(expr.lower, this_expr, that_expr), 
-                    substitute(expr.upper, this_expr, that_expr), 
-                    substitute(expr.body, this_expr, that_expr), 
-                    expr.dvar
-                )
+        lower = substitute(expr.lower, this_expr, that_expr)
+        upper = substitute(expr.upper, this_expr, that_expr)
+        body = substitute(expr.body, this_expr, that_expr)
+        return Teg(lower, upper, body, expr.dvar)
 
     elif isinstance(expr, Tup):
         return Tup(*(substitute(child, this_expr, that_expr) for child in expr))

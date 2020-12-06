@@ -94,13 +94,13 @@ class TegOverloads:
         return Bool(other, self, allow_eq=True)
 
     def __ete__(self):
-        ete_string = f'('
+        # TODO: This should be removed? It doesn't do anything?l
+        ete_string = '('
         for child in self.children:
             ete_string = f'{ete_string} {child.__ete__},'
         if len(self.children) >= 1:
             ete_string = ete_string[:-1]
 
-        #if child.value 
         ete_string = ete_string + f':{child.value}'
 
 
@@ -123,6 +123,7 @@ class TegVariableOverloads:
     def __ete__(self):
         return f'Var_{self.name}:{self.value}'
 
+
 @overloads(TegVar)
 class TegTegVariableOverloads:
 
@@ -133,6 +134,7 @@ class TegTegVariableOverloads:
     def __repr__(self):
         value = '' if self.value is None else f', value={self.value}'
         return f'TegVar(name={self.name}{value}, uid={self.uid})'
+
 
 @overloads(TegRemap)
 class TegRemapOverloads:
@@ -235,6 +237,7 @@ class TegConditionalOverloads:
     def __repr__(self):
         return f'IfElse({repr(self.cond)}, {repr(self.if_body)}, {repr(self.else_body)})'
 
+
 @overloads(SmoothFunc)
 class SmoothFuncOverloads:
 
@@ -248,6 +251,7 @@ class SmoothFuncOverloads:
 
     def __repr__(self):
         return f'{self.name}({repr(self.expr)})'
+
 
 @overloads(Tup)
 class TegTupleOverloads:

@@ -175,7 +175,7 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup) -> ITeg:
         new_vals = [remap_all(e) for e in new_vals]
 
         sorted_list = list(zip(uids, new_vars, new_vals))
-        sorted_list.sort(key=lambda a:a[0])
+        sorted_list.sort(key=lambda a: a[0])
         _, new_vars, new_vals = list(zip(*sorted_list))
 
         # print('Reverse-mode list order: ', ''.join([str(var) + ', ' for var in new_vars]))

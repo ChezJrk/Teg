@@ -72,10 +72,7 @@ def simplify(expr: ITeg) -> ITeg:
             return reduce(operator.add, simplified_nodes)
 
         if isinstance(simple1, LetIn) and isinstance(simple2, LetIn):
-            # print(f"Matching let statements, \n{simple1.new_vars} {simple1.new_exprs[0]} \n
-            # {simple2.new_vars} {simple2.new_exprs[0]} \n\n")
             if simple1.new_vars == simple2.new_vars and simple1.new_exprs == simple2.new_exprs:
-                # print(f"Matched let statements, {simple1.new_vars}")
                 return LetIn(
                                 new_vars=simple1.new_vars,
                                 new_exprs=simple1.new_exprs,
@@ -85,11 +82,7 @@ def simplify(expr: ITeg) -> ITeg:
                 return simple1 + simple2
 
         if isinstance(simple1, Teg) and isinstance(simple2, Teg):
-            # print(f"Matching teg statements, \n{simple1.dvar} {simple1.upper} \n{simple2.dvar} {simple2.upper}")
-            if simple1.dvar == simple2.dvar and \
-               simple1.lower == simple2.lower and \
-               simple1.upper == simple2.upper:
-                # print(f"Matched Teg statements, {simple1.dvar}, {simple2.dvar}")
+            if (simple1.dvar == simple2.dvar and simple1.lower == simple2.lower and simple1.upper == simple2.upper):
                 return simplify(Teg(simple1.lower, simple1.upper, simplify(simple1.body + simple2.body), simple1.dvar))
 
             else:

@@ -51,7 +51,7 @@ def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
         expr.dvar.value = None
 
         # Sample different values of the variable (dvar) and evaluate
-        # Currently do NON-DIFFERENTIABLE uniform sampling
+        # Currently do (non-differentiable) uniform sampling
         def compute_samples(var_sample):
             expr.body.bind_variable(expr.dvar, var_sample)
             return evaluate(expr.body, num_samples, ignore_cache=True)
