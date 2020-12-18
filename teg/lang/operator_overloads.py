@@ -51,6 +51,9 @@ class TegOverloads:
     def __radd__(self, other):
         return try_making_teg_const(other) + self
 
+    def __rsub__(self, other):
+        return try_making_teg_const(other) - self
+
     def __rmul__(self, other):
         return try_making_teg_const(other) * self
 
@@ -84,13 +87,13 @@ class TegOverloads:
     def __lt__(self, other):
         return Bool(self, other)
 
-    def __leq__(self, other):
+    def __le__(self, other):
         return Bool(self, other, allow_eq=True)
 
     def __gt__(self, other):
         return Bool(other, self)
 
-    def __geq__(self, other):
+    def __ge__(self, other):
         return Bool(other, self, allow_eq=True)
 
     def __ete__(self):
@@ -260,7 +263,7 @@ class TegTupleOverloads:
         return ", ".join([str(e) for e in self.children])
 
     def __repr__(self):
-        return f'Tup([{repr(e) for e in self.children}])'
+        return f'Tup({[repr(e) for e in self.children]})'
 
     def __iter__(self):
         yield from (e for e in self.children)
