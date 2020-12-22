@@ -1,7 +1,9 @@
+from typing import List, Optional
 from teg import (
     ITeg,
     Tup,
-    Ctx
+    Ctx,
+    Var
 )
 
 from .fwd_deriv import fwd_deriv
@@ -25,8 +27,8 @@ class FwdDeriv(ITeg):
 
 class RevDeriv(ITeg):
 
-    def __init__(self, expr: ITeg, out_deriv_vals: Tup):
-        super(RevDeriv, self).__init__(children=[reverse_deriv(expr, out_deriv_vals)])
+    def __init__(self, expr: ITeg, out_deriv_vals: Tup, output_list: Optional[List[Var]] = None):
+        super(RevDeriv, self).__init__(children=[reverse_deriv(expr, out_deriv_vals, output_list=output_list)])
         self.deriv_expr = self.children[0]
         self.expr = expr
         self.out_deriv_vals = out_deriv_vals

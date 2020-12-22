@@ -1,4 +1,4 @@
-from typing import Set, Tuple, Iterable, Optional
+from typing import Set, Tuple, Iterable, Optional, List
 from collections import defaultdict
 from functools import reduce
 import operator
@@ -87,8 +87,10 @@ def reverse_deriv_transform(expr: ITeg,
         not_ctx.discard((expr.dvar.name, expr.dvar.uid))
 
         # Apply Leibniz rule directly for moving boundaries
-        lower_derivs = reverse_deriv_transform(expr.lower, out_deriv_vals, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
-        upper_derivs = reverse_deriv_transform(expr.upper, out_deriv_vals, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
+        lower_derivs = reverse_deriv_transform(expr.lower, out_deriv_vals, not_ctx,
+                                               teg_list | {(expr.dvar, expr.lower, expr.upper)})
+        upper_derivs = reverse_deriv_transform(expr.upper, out_deriv_vals, not_ctx,
+                                               teg_list | {(expr.dvar, expr.lower, expr.upper)})
         yield from ((name_uid, upper_deriv * substitute(expr.body, expr.dvar, expr.upper))
                     for name_uid, upper_deriv in upper_derivs)
         yield from ((name_uid, - lower_deriv * substitute(expr.body, expr.dvar, expr.lower))
@@ -105,7 +107,7 @@ def reverse_deriv_transform(expr: ITeg,
             delta_deriv_dict = {}
             for i in delta_deriv_parts:
                 delta_deriv_dict.setdefault(i[0], []).append(i[1])
-        
+
             delta_deriv_list = []
             for (uid, exprs) in delta_deriv_dict.items():
                 delta_deriv_list.append((uid, remapping(delta_expr * out_deriv_vals * reduce(operator.add, exprs))))
@@ -144,7 +146,7 @@ def reverse_deriv_transform(expr: ITeg,
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported derivative.')
 
 
-def reverse_deriv(expr: ITeg, out_deriv_vals: Tup) -> ITeg:
+def reverse_deriv(expr: ITeg, out_deriv_vals: Tup, output_list: Optional[List[Var]] = []) -> ITeg:
     """Computes the derivative of a given expression.
 
     Args:
@@ -161,7 +163,8 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup) -> ITeg:
 
     def derivs_for_single_outval(expr: ITeg,
                                  single_outval: Const,
-                                 i: Optional[int] = None) -> ITeg:
+                                 i: Optional[int] = None,
+                                 output_list: Optional[List[Var]] = None) -> ITeg:
         partial_deriv_map = defaultdict(lambda: Const(0))
 
         # After deriv_transform, expr will have unbound infinitesimals
@@ -174,9 +177,16 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup) -> ITeg:
         new_vals = [*partial_deriv_map.values()]
         new_vals = [remap_all(e) for e in new_vals]
 
-        sorted_list = list(zip(uids, new_vars, new_vals))
-        sorted_list.sort(key=lambda a:a[0])
-        _, new_vars, new_vals = list(zip(*sorted_list))
+        if output_list is not None:
+            # Return requested list of outputs.
+            var_map = {uid: (var, val) for uid, var, val in zip(uids, new_vars, new_vals)}
+            new_vars, new_vals = zip(*[var_map.get(var.uid, (Var(f'd{var.name}'), Const(0)))
+                                       for var in output_list])
+        else:
+            # Return a list sorted in the order the variables were defined.
+            sorted_list = list(zip(uids, new_vars, new_vals))
+            sorted_list.sort(key=lambda a: a[0])
+            _, new_vars, new_vals = list(zip(*sorted_list))
 
         # print('Reverse-mode list order: ', ''.join([str(var) + ', ' for var in new_vars]))
 
@@ -187,12 +197,12 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup) -> ITeg:
 
     if len(out_deriv_vals) == 1:
         single_outval = out_deriv_vals.children[0]
-        derivs = derivs_for_single_outval(expr, single_outval, 0)
+        derivs = derivs_for_single_outval(expr, single_outval, 0, output_list=output_list)
     else:
         assert len(out_deriv_vals) == len(expr), \
             f'Expected out_deriv to have "{len(expr)}" values, but got "{len(out_deriv_vals)}" values.'
 
-        derivs = (derivs_for_single_outval(e, single_outval, i)
+        derivs = (derivs_for_single_outval(e, single_outval, i, output_list=output_list)
                   for i, (e, single_outval) in enumerate(zip(expr, out_deriv_vals)))
         derivs = Tup(*derivs)
     return derivs

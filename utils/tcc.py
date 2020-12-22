@@ -1,8 +1,10 @@
 from optparse import OptionParser
 import importlib.util
 
-from teg.ir import emit
-from teg.passes import simplify
+from teg.passes import compile
+from teg.passes.simplify import simplify
+
+from teg.ir.passes.to_c import to_c
 
 parser = OptionParser()
 parser.add_option("-o", "--output", dest="output", help="output file")
@@ -13,7 +15,10 @@ parser.add_option("-s", "--samples", dest="samples", help="sample count", defaul
 
 (options, args) = parser.parse_args()
 
-float_type = 'float' if options.precision == 'single' else 'double'
+assert options.precision in ['single', 'double'],\
+       f'Invalid precision setting {options.precision}. Specify either single or double'
+float_type = {'single': 'float',
+              'double': 'double'}[options.precision]
 
 input_file = args[0]
 print(input_file)
@@ -38,14 +43,33 @@ else:
     arglist = []
 
 print(f"Converting to {options.target} file {output_file}")
-method = emit(program,
-              target=options.target,
-              fn_name=options.method,
-              arglist=[f'{var.name}_{var.uid}' for var in arglist],
-              num_samples=options.samples,
-              float_type=float_type)
+
+assert options.target in ['C', 'CUDA_C'], 'No other backends are supported at the moment'
+
+ir_func = compile.to_ir(program)
+# Force name.
+ir_func.func_name = options.method
+
+# Force input order.
+labelled_inputs = {symbol.label: symbol for symbol in ir_func.inputs}
+ordered_inputs = [labelled_inputs[f'{var.name}_{var.uid}'] for var in arglist]
+ir_func.inputs = ordered_inputs + list(ir_func.inputs - set(ordered_inputs))
+
+if options.target == 'C':
+    funclist, arglist = to_c(ir_func, float_width=float_type, num_samples=options.samples)
+    header = '#include "teg_c_runtime.h"'
+    code = header + '\n'
+    for func_name, func_body in funclist:
+        code += func_body + '\n'
+
+elif options.target == 'CUDA_C':
+    funclist, arglist = to_c(ir_func, device_code=True, float_width=float_type, num_samples=options.samples)
+    header = '#include "teg_cuda_runtime.h"'
+    code = header + '\n'
+    for func_name, func_body in funclist:
+        code += func_body + '\n'
 
 ofile = open(output_file, "w")
-ofile.write(method.code)
+ofile.write(code)
 print(f"Generated {options.target} code in {output_file}")
 ofile.close()
