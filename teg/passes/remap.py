@@ -3,10 +3,7 @@
     on Teg expression trees.
 """
 
-from typing import Dict, Set, List, Tuple, Iterable
-from functools import reduce
-from itertools import product
-import operator
+from typing import Dict
 
 from teg import (
     ITeg,
@@ -21,13 +18,9 @@ from teg import (
     Teg,
     Tup,
     LetIn,
-    Ctx,
-    ITegBool,
     Bool,
     And,
     Or,
-    true,
-    false,
 )
 
 from teg.lang.markers import (
@@ -70,7 +63,7 @@ def remap(expr: ITeg):
     # Find normalization if it exists. TODO: This is hacky.. fix later
     normalization_map = [(r_var, r_expr) for r_var, r_expr in remap_expr.exprs.items() if r_var[0] == '__norm__']
 
-    var_list = [Var(name=name, uid=uid) for (name, uid) in remap_expr.exprs.keys() if name != '__norm__']
+    var_list = Tup(*[Var(name=name, uid=uid) for (name, uid) in remap_expr.exprs.keys() if name != '__norm__'])
     remapped_tree = LetIn(var_list, remap_expr.exprs.values(), remapped_tree)
 
     # Add integral operators for the new variables back to the top.
@@ -83,7 +76,7 @@ def remap(expr: ITeg):
         normalization_map = normalization_map[0]
         norm_var = Var(name=normalization_map[0][0], uid=normalization_map[0][1])
         norm_expr = normalization_map[1]
-        new_expr = LetIn((norm_var,), (norm_expr,), new_expr)
+        new_expr = LetIn(Tup(norm_var), Tup(norm_expr), new_expr)
 
     # Resolve any placeholders due to Teg bounds.
     for tegvar, lower, upper in remap_expr.source_bounds:
@@ -127,7 +120,7 @@ def remap_gather(expr: ITeg):
 
             # Add bounds check. This will be transformed later in the process.
             bounds_check = (expr.lower < expr.dvar) & (expr.upper > expr.dvar)
-            remapped_tree = IfElse(bounds_check, remapped_tree, 0)
+            remapped_tree = IfElse(bounds_check, remapped_tree, Const(0))
 
             return remap_expr, remapped_tree, teg_list + [(new_dvar, lexpr, uexpr)]
 
@@ -136,12 +129,13 @@ def remap_gather(expr: ITeg):
             remap_expr, remapped_tree, teg_list = remap_gather(child)
             if remap_expr is not None:
                 children = expr.children[:idx] + [remapped_tree] + expr.children[idx + 1:]
-                return remap_expr, LetIn(new_vars=expr.new_vars, new_exprs=children[1:], expr=children[0]), teg_list
+                remapped_tree = LetIn(new_vars=expr.new_vars, new_exprs=Tup(children[1:]), expr=children[0])
+                return remap_expr, remapped_tree, teg_list
 
         return None, None, []
 
     elif isinstance(expr, Add):
-        for child in expr.children: 
+        for child in expr.children:
             remap_expr, remapped_tree, teg_list = remap_gather(child)
             if remap_expr is None:
                 continue
@@ -151,7 +145,7 @@ def remap_gather(expr: ITeg):
         return None, None, []
 
     elif isinstance(expr, Mul):
-        for index, child in enumerate(expr.children): 
+        for index, child in enumerate(expr.children):
             remap_expr, remapped_tree, teg_list = remap_gather(child)
             if remap_expr is None:
                 continue

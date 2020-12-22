@@ -1,5 +1,6 @@
 from typing import Dict, Set, List, Tuple
 from functools import reduce
+
 from teg import (
     ITeg,
     Const,
@@ -14,19 +15,11 @@ from teg import (
     TegVar,
     SmoothFunc,
     Ctx,
-    ITegBool,
-    Bool,
-    And,
-    Or,
-    true,
-    false,
 )
-
 from teg.lang.markers import (
     Placeholder,
     TegRemap
 )
-
 from teg.passes.substitute import substitute
 from teg.passes.remap import remap, is_remappable
 
@@ -141,7 +134,7 @@ def fwd_deriv_transform(expr: ITeg,
         delta_val = Const(0)
 
         delta_set = rotated_delta_contribution(expr, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
-        for (delta_expression, distance_to_delta, remapping) in delta_set:
+        for delta_expression, distance_to_delta, remapping in delta_set:
             distance_derivative, ctx, not_ctx, _ = fwd_deriv_transform(distance_to_delta, ctx, not_ctx, set())
             delta_val += remapping(delta_expression * distance_derivative)
 

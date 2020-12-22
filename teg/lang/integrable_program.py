@@ -171,7 +171,7 @@ class Ctx(dict):
             return self.parent[key]
 
 
-class ITegBool:
+class ITegBool(ITeg):
 
     def __init__(self):
         self.value = None

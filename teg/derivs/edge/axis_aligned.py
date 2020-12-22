@@ -17,7 +17,7 @@ from teg.passes.substitute import substitute
 from .common import extract_moving_discontinuities
 
 
-def extract_constants_from_affine(expr: ITeg) -> List[ITeg]:
+def extract_constants_from_affine(expr: ITeg) -> List[Const]:
 
     if isinstance(expr, Const):
         return [expr]
@@ -32,7 +32,7 @@ def extract_constants_from_affine(expr: ITeg) -> List[ITeg]:
         raise ValueError(f'The expression of type "{type(expr)}" results in a computation that is not affine.')
 
 
-def extract_variables_from_affine(expr: ITeg) -> Dict[Tuple[str, int], ITeg]:
+def extract_variables_from_affine(expr: ITeg) -> Dict[Tuple[str, int], Var]:
 
     if isinstance(expr, Const):
         return {}
@@ -85,7 +85,7 @@ def solve_for_dvar(expr: ITeg, var: ITeg):
         elif len(cs) > 0:
             const += prod(cs)
 
-    # Remove var_name and negate all constants
+    # Remove var.name and negate all constants
     cks, vs = d.pop((var.name, var.uid))
     ck_val = prod(cks)
 

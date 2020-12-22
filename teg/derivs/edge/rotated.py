@@ -94,7 +94,7 @@ def is_expr_parametric(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> bool:
 def check_affine(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> bool:
     if isinstance(expr, Mul):
         cvals = [is_expr_parametric(child, not_ctx) for child in expr.children]
-        return (cvals.count(False) == 1) and check_affine(expr.children[cvals.index(False)])
+        return (cvals.count(False) == 1) and check_affine(expr.children[cvals.index(False)], not_ctx)
     elif isinstance(expr, Add):
         return reduce([check_affine(child, not_ctx) for child in expr.children], operator.and_)
     elif isinstance(expr, TegVar) and (expr.name, expr.uid) in not_ctx:

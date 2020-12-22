@@ -26,6 +26,7 @@ from .markers import (
 
 from teg.utils import overloads
 
+
 @overloads(ITeg)
 class TegOverloads:
 
@@ -106,6 +107,7 @@ class TegVariableOverloads:
     def __ete__(self):
         return f'Var_{self.name}:{self.value}'
 
+
 @overloads(TegVar)
 class TegTegVariableOverloads:
 
@@ -116,6 +118,7 @@ class TegTegVariableOverloads:
     def __repr__(self):
         value = '' if self.value is None else f', value={self.value}'
         return f'TegVar(name={self.name}{value}, uid={self.uid})'
+
 
 @overloads(TegRemap)
 class TegRemapOverloads:
@@ -218,6 +221,7 @@ class TegConditionalOverloads:
     def __repr__(self):
         return f'IfElse({repr(self.cond)}, {repr(self.if_body)}, {repr(self.else_body)})'
 
+
 @overloads(SmoothFunc)
 class SmoothFuncOverloads:
 
@@ -231,6 +235,7 @@ class SmoothFuncOverloads:
 
     def __repr__(self):
         return f'{self.name}({repr(self.expr)})'
+
 
 @overloads(Tup)
 class TegTupleOverloads:
