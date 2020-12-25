@@ -1,4 +1,4 @@
-from typing import Set, Tuple, Iterable, Optional, List
+from typing import Set, List, Tuple, Iterable, Optional
 from collections import defaultdict
 from functools import reduce
 import operator
@@ -164,7 +164,8 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup, output_list: Optional[List[Va
     def derivs_for_single_outval(expr: ITeg,
                                  single_outval: Const,
                                  i: Optional[int] = None,
-                                 output_list: Optional[List[Var]] = None) -> ITeg:
+                                 output_list: Optional[List[Var]] = None) -> Tuple[List[Var], ITeg]:
+
         partial_deriv_map = defaultdict(lambda: Const(0))
 
         # After deriv_transform, expr will have unbound infinitesimals
@@ -193,7 +194,7 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup, output_list: Optional[List[Va
         assert len(new_vals) > 0, 'There must be variables to compute derivatives. '
         out_expr = Tup(*new_vars) if len(new_vars) > 1 else new_vars[0]
         derivs = LetIn(Tup(*new_vars), Tup(*new_vals), out_expr)
-        return derivs
+        return new_vars, derivs
 
     if len(out_deriv_vals) == 1:
         single_outval = out_deriv_vals.children[0]
