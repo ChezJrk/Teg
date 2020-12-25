@@ -83,7 +83,7 @@ def substitute(expr: ITeg, this_expr: ITeg, that_expr: ITeg) -> ITeg:
     elif isinstance(expr, Bool):
         left_expr = substitute(expr.left_expr, this_expr, that_expr)
         right_expr = substitute(expr.right_expr, this_expr, that_expr)
-        return Bool(left_expr, right_expr)
+        return Bool(left_expr, right_expr, allow_eq=expr.allow_eq)
 
     elif isinstance(expr, And):
         left_expr = substitute(expr.left_expr, this_expr, that_expr)

@@ -100,7 +100,7 @@ def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
     elif isinstance(expr, Bool):
         left_val = evaluate(expr.left_expr, num_samples, ignore_cache)
         right_val = evaluate(expr.right_expr, num_samples, ignore_cache)
-        expr.value = (left_val < right_val) or (expr.allow_eq and (expr.left_val == expr.right_val))
+        expr.value = (left_val < right_val) or (expr.allow_eq and (left_val == right_val))
 
     elif isinstance(expr, And):
         left_val = evaluate(expr.left_expr, num_samples, ignore_cache)
