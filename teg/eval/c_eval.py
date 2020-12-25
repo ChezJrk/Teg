@@ -27,7 +27,7 @@ class C_EvalMode(EvalMode):
         super(C_EvalMode, self).__init__(name='C')
 
         self.ir_func = to_ir(expr)
-        #print(self.ir_func)
+
         convert_output_to_target(self.ir_func, 'native')  # Ensure output type is generic_array<float, N>
 
         self.options = {'num_samples': num_samples, 'float_width': 'float'}
@@ -163,7 +163,7 @@ class C_EvalMode_PyBind(EvalMode):
         super(C_EvalMode_PyBind, self).__init__(name='C')
 
         ir_func = to_ir(expr)
-        # print(ir_func)
+
         convert_output_to_target(ir_func, 'py')
 
         options = {'num_samples': num_samples}
@@ -257,13 +257,10 @@ class C_EvalMode_PyBind(EvalMode):
 
     def eval(self, **kwargs):
         if not self.preprocessed:
-            # print('preprocessing')
             self._preprocess()
         if not self.compiled:
-            # print('compiling')
             self._compile()
         if not self.loaded:
-            # print('loading')
             self._load()
 
         args = [kwargs[arg] if arg in kwargs.keys() else teg_var.value for arg, default, teg_var in self.arglist]

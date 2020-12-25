@@ -59,9 +59,6 @@ def tegpass_typing(obj: Any, *args, **kwargs):
     assert '__tegpass_typing__' in dir(obj), 'Encountered unsupported object'
     out = obj.__tegpass_typing__(*args, **kwargs)
 
-    # if hasattr(obj, 'output'):
-    #    print(f"{type(obj)} set {obj.output} to {obj.output.irtype()}")
-
     return out
 
 
@@ -214,7 +211,6 @@ class TypingPass_Pack:
         input_symbols = self.inputs
         input_type = input_symbols[0].irtype()
 
-        # print(f'{input_symbols[0]}')
         assert input_type.size == 1,\
                f'Teg IR currently does not support multidimensional packing {input_symbols[0]}. '\
                f'Use compatibility mode (backend="numpy") instead.'
@@ -230,7 +226,7 @@ class TypingPass_Integrate:
         assert self.upper_bound.irtype() == self.lower_bound.irtype(),\
                f'Bounds are of different types: {self.upper_bound.irtype()} and {self.lower_bound.irtype()}'
         self.teg_var.set_irtype(self.upper_bound.irtype())
-        # print(self.teg_var, ' ', self.teg_var.irtype())
+
         tegpass_typing(self.call)
         self.output.set_irtype(self.call.output.irtype())
 

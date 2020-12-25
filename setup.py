@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="teg",  # Replace with your own PACKAGE NAME. For the love of god..
+    name="teg",
     version="0.0.1",
     author="Jesse Michel, Sai Bangaru",
     author_email="sbangaru@mit.edu",  # Apparently can't put two email IDs
