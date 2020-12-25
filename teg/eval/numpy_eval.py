@@ -18,6 +18,22 @@ from teg import (
 )
 
 from teg.derivs import FwdDeriv, RevDeriv
+from .eval_mode import EvalMode
+
+
+class Numpy_EvalMode(EvalMode):
+    def __init__(self, expr: ITeg, num_samples=50):
+        super(Numpy_EvalMode, self).__init__(name='numpy')
+        self.expr = expr
+        self.options = {
+            "num_samples": num_samples
+        }
+
+    def eval(self, **kwargs):
+        for var, value in kwargs.items():
+            self.expr.bind_variable(var, value)
+
+        return evaluate(self.expr, ignore_cache=True, **self.options)
 
 
 def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):

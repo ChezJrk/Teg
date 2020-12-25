@@ -24,13 +24,7 @@ from .markers import (
     TegRemap
 )
 
-
-def overloads(to_cls):
-    def overloaded(from_cls):
-        """Dynamically inject all functions in `from_cls` into `to_cls`. """
-        for func in filter(lambda x: callable(x), from_cls.__dict__.values()):
-            setattr(to_cls, func.__name__, func)
-    return overloaded
+from teg.utils import overloads
 
 
 @overloads(ITeg)
@@ -95,16 +89,6 @@ class TegOverloads:
 
     def __ge__(self, other):
         return Bool(other, self, allow_eq=True)
-
-    def __ete__(self):
-        # TODO: This should be removed? It doesn't do anything?l
-        ete_string = '('
-        for child in self.children:
-            ete_string = f'{ete_string} {child.__ete__},'
-        if len(self.children) >= 1:
-            ete_string = ete_string[:-1]
-
-        ete_string = ete_string + f':{child.value}'
 
 
 @overloads(Var)

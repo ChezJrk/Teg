@@ -63,8 +63,8 @@ class SmoothFunc(ITeg):
         SmoothFunc is an abstract class that children must implement.
     """
     def __init__(self, expr: ITeg, name: str = 'SmoothFunc'):
-        super(SmoothFunc, self).__init__(children=[expr])
-        self.expr = expr
+        super(SmoothFunc, self).__init__(children=[try_making_teg_const(expr)])
+        self.expr = self.children[0]
         self.name = name
 
     def fwd_deriv(self, in_deriv_expr: ITeg) -> ITeg:

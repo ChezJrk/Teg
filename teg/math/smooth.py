@@ -29,6 +29,9 @@ class Sqrt(SmoothFunc):
     def operation(self, in_value):
         return np.sqrt(in_value)
 
+    def output_size(input_size):
+        return input_size
+
 
 class Sqr(SmoothFunc):
     """
@@ -45,3 +48,6 @@ class Sqr(SmoothFunc):
 
     def operation(self, in_value):
         return np.power(in_value, 2)
+
+    def output_size(input_size):
+        return input_size
