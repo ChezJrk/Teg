@@ -393,9 +393,18 @@ class ActualIntegrationTest(TestCase):
         x = TegVar('x')
         integral = Teg(Const(0), Const(1), x, x)
 
-        with self.assertRaises((AssertionError, AttributeError)):
-            d_integral = FwdDeriv(integral, [(x, 1)])
-            evaluate(d_integral)
+        d_integral = FwdDeriv(integral, [(x, 1)])
+        self.assertEqual(evaluate(d_integral), 0)
+
+    def test_deriv_expr(self):
+        x, y = Var('x', 1), Var('y', 2)
+        expr = 2 * x + y
+
+        d_expr = FwdDeriv(expr, [(x, 1)])
+        self.assertEqual(evaluate(d_expr), 2)
+
+        d_expr = FwdDeriv(expr, [(y, 1)])
+        self.assertEqual(evaluate(d_expr), 1)
 
 
 class VariableBranchConditionsTest(TestCase):
