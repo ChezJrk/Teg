@@ -23,7 +23,7 @@ from teg import (
 
 from teg.derivs import FwdDeriv, RevDeriv
 
-from teg.eval import numpy_eval as evaluate
+from teg.eval.numpy_eval import evaluate
 from teg.passes.substitute import substitute
 
 
@@ -89,9 +89,7 @@ def simplify(expr: ITeg) -> ITeg:
                 return simple1 + simple2
 
         if isinstance(simple1, IfElse) and isinstance(simple2, IfElse):
-            # print(f"Matching IfElse statements, \n{simple1.cond} \n{simple2.cond}")
             if simple1.cond == simple2.cond:
-                # print(f"Matched IfElse statements, \n{simple1.cond} \n{simple2.cond}")
                 return IfElse(
                               simple1.cond,
                               simplify(simple1.if_body + simple2.if_body),
@@ -153,6 +151,7 @@ def simplify(expr: ITeg) -> ITeg:
                 return simple1 * simple2
 
             # Compress const nodes.
+            # import ipdb; ipdb.set_trace()
             const_node = Const(evaluate(reduce(operator.mul, const_nodes)))
 
             # Re-order to front.
