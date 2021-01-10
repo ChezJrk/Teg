@@ -1,8 +1,6 @@
 from typing import Set, Dict, Tuple
-from .integrable_program import (
-    ITeg,
-    Var,
-    TegVar
+from .base import (
+    Var
 )
 
 
@@ -12,7 +10,7 @@ class Placeholder(Var):
         super(Placeholder, self).__init__(name=name)
         self.signature = signature
 
-
+'''
 class TegRemap(ITeg):
     """Intermediate element that holds a variable remapping as well as target expressions. """
     def __init__(self,
@@ -32,3 +30,4 @@ class TegRemap(ITeg):
         self.exprs = exprs
         self.operation = None  # Cannot eval.
         self.name = name
+'''

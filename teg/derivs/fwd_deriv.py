@@ -15,15 +15,22 @@ from teg import (
     TegVar,
     SmoothFunc,
     Ctx,
+    true,
+    false
+)
+from teg.lang.extended import (
+    BiMap,
+    Delta
 )
 from teg.lang.markers import (
     Placeholder,
-    TegRemap
+    # TegRemap
 )
 from teg.passes.substitute import substitute
-from teg.passes.remap import remap, is_remappable
+# from teg.passes.remap import remap, is_remappable
 
-from .edge.rotated import rotated_delta_contribution
+# from .edge.rotated import rotated_delta_contribution
+from .edge.common import primitive_booleans_in
 
 
 def boundary_contribution(expr: ITeg,
@@ -46,13 +53,15 @@ def fwd_deriv_transform(expr: ITeg,
                         teg_list: Set[Tuple[TegVar, ITeg, ITeg]]
                         ) -> Tuple[ITeg, Dict[Tuple[str, int], str], Set[Tuple[str, int]]]:
     """Compute the source-to-source foward derivative of the given expression."""
-
     if isinstance(expr, TegVar):
         if (expr.name, expr.uid) not in not_ctx:
             if (expr.name, expr.uid) not in ctx:
+
                 # Introduce derivative and leave the value unbound
                 var = Var(f'd{expr.name}')
                 ctx[(expr.name, expr.uid)] = var
+                # print('TEGVAR-GEN')
+                # print(f'{expr.name}: {ctx}')
             else:
                 # Use the old derivative
                 var = ctx[(expr.name, expr.uid)]
@@ -63,8 +72,16 @@ def fwd_deriv_transform(expr: ITeg,
     elif isinstance(expr, (Const, Placeholder)):
         expr = Const(0)
 
-    elif isinstance(expr, (TegRemap,)):
-        assert False, "Cannot take derivative of transient elements."
+    # elif isinstance(expr, (TegRemap,)):
+    #    assert False, "Cannot take derivative of transient elements."
+
+    elif isinstance(expr, BiMap):
+        # No derivative requirement.
+        # BiMaps are only for TegVars and they shouldn't have derivatives.
+        pass
+
+    elif isinstance(expr, Delta):
+        assert False, "Cannot take the derivative of a Delta. Reduce all Deltas first"
 
     elif isinstance(expr, Var):
         # NOTE: No expressions with the name "d{expr.name}" are allowed
@@ -73,6 +90,8 @@ def fwd_deriv_transform(expr: ITeg,
                 # Introduce derivative and leave the value unbound
                 var = Var(f'd{expr.name}')
                 ctx[(expr.name, expr.uid)] = var
+                # print('TEGVAR-GEN')
+                # print(f'{expr.name}, {ctx}')
             else:
                 # Use the old derivative
                 var = ctx[(expr.name, expr.uid)]
@@ -90,16 +109,32 @@ def fwd_deriv_transform(expr: ITeg,
             e1, ctx1, not_ctx1, teg_list1 = out1
             e2, ctx2, not_ctx2, teg_list2 = out2
             return expr.operation(e1, e2), {**ctx1, **ctx2}, not_ctx1 | not_ctx2, teg_list1 | teg_list2
-        expr, ctx, not_ctx, _ = reduce(union, (fwd_deriv_transform(
-                                                                   child, ctx,
-                                                                   not_ctx, teg_list
-                                                                   ) for child in expr.children))
+
+        e_all = Const(0)
+        for child in expr.children:
+            e, ctx, not_ctx, teg_list = fwd_deriv_transform(
+                                        child, ctx,
+                                        not_ctx, teg_list
+                                    )
+            e_all = e_all + e
+
+        expr = e_all
 
     elif isinstance(expr, Mul):
         # NOTE: Consider n-ary multiplication.
+        assert len(expr.children) == 2, 'fwd_deriv does not currently handle non-binary multiplication'
         expr1, expr2 = [child for child in expr.children]
-        deriv = [fwd_deriv_transform(child, ctx, not_ctx, teg_list) for child in expr.children]
-        (fwd_deriv_expr1, ctx1, not_ctx1, _), (fwd_deriv_expr2, ctx2, not_ctx2, _) = deriv
+
+        (fwd_deriv_expr1, ctx1, not_ctx1, _) = fwd_deriv_transform(
+                                                    expr1, ctx,
+                                                    not_ctx, teg_list
+                                               )
+
+        (fwd_deriv_expr2, ctx2, not_ctx2, _) = fwd_deriv_transform(
+                                                    expr2, ctx,
+                                                    not_ctx, teg_list
+                                               )
+
         expr = expr1 * fwd_deriv_expr2 + expr2 * fwd_deriv_expr1
         ctx = {**ctx1, **ctx2}
         not_ctx = not_ctx1 | not_ctx2
@@ -109,11 +144,20 @@ def fwd_deriv_transform(expr: ITeg,
         expr = -expr * expr * deriv_expr
 
     elif isinstance(expr, IfElse):
-        if_body, ctx1, not_ctx1, _ = fwd_deriv_transform(expr.if_body, ctx, not_ctx, teg_list)
-        else_body, ctx2, not_ctx2, _ = fwd_deriv_transform(expr.else_body, ctx, not_ctx, teg_list)
-        ctx = {**ctx1, **ctx2}
+        if_body, ctx, not_ctx1, _ = fwd_deriv_transform(expr.if_body, ctx, not_ctx, teg_list)
+        else_body, ctx, not_ctx2, _ = fwd_deriv_transform(expr.else_body, ctx, not_ctx, teg_list)
+        # ctx = {**ctx1, **ctx2}
         not_ctx = not_ctx1 | not_ctx2
-        expr = IfElse(expr.cond, if_body, else_body)
+
+        deltas = Const(0)
+        for boolean in primitive_booleans_in(expr.cond, not_ctx):
+            jump = substitute(expr, boolean, true) - substitute(expr, boolean, false)
+            delta_expr = boolean.right_expr - boolean.left_expr
+
+            delta_deriv, ctx, _ignore_not_ctx, _ = fwd_deriv_transform(delta_expr, ctx, not_ctx, teg_list)
+            deltas = deltas + delta_deriv * jump * Delta(delta_expr)
+
+        expr = IfElse(expr.cond, if_body, else_body) + deltas
 
     elif isinstance(expr, Teg):
         assert expr.dvar not in ctx, f'Names of infinitesimal "{expr.dvar}" are distinct from context "{ctx}"'
@@ -131,19 +175,21 @@ def fwd_deriv_transform(expr: ITeg,
             delta_val += deriv_expr * moving_var_delta
         """
 
+        """
         delta_val = Const(0)
 
         delta_set = rotated_delta_contribution(expr, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
         for delta_expression, distance_to_delta, remapping in delta_set:
             distance_derivative, ctx, not_ctx, _ = fwd_deriv_transform(distance_to_delta, ctx, not_ctx, set())
             delta_val += remapping(delta_expression * distance_derivative)
+        """
 
         body, ctx, not_ctx, _ = fwd_deriv_transform(expr.body, ctx, not_ctx,
                                                     teg_list | {(expr.dvar, expr.lower, expr.upper)})
 
         ctx.update(new_ctx)
         not_ctx |= new_not_ctx
-        expr = Teg(expr.lower, expr.upper, body, expr.dvar) + delta_val + boundary_val
+        expr = Teg(expr.lower, expr.upper, body, expr.dvar) + boundary_val  # + delta_val + boundary_val
 
     elif isinstance(expr, Tup):
         new_expr_list, new_ctx, new_not_ctx = [], Ctx(), set()
@@ -177,6 +223,7 @@ def fwd_deriv_transform(expr: ITeg,
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported fwd_derivative.')
 
+    # print(ctx)
     return expr, ctx, not_ctx, teg_list
 
 
@@ -193,15 +240,19 @@ def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]]) -> ITeg:
     """
     binding_map = {(var.name, var.uid): val for var, val in bindings}
 
+    # print('OLD: ')
+    # print(expr)
     # After fwd_deriv_transform, expr will have unbound infinitesimals
     full_expr, ctx, not_ctx, _ = fwd_deriv_transform(expr, {}, set(), set())
 
     # Resolve all TegRemap expressions by lifting expressions
     # out of the tree.
     expr = full_expr
-    while is_remappable(expr):
-        expr = remap(expr)
+    # while is_remappable(expr):
+    #    expr = remap(expr)
 
+    # print('DERIV:')
+    # print(expr)
     assert binding_map.keys() == ctx.keys(), (f'You provided bindings for "{set(binding_map.keys())}" '
                                               f'but bindings were produced for "{set(ctx.keys())}"')
 

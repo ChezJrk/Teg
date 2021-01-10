@@ -27,7 +27,7 @@ class C_EvalMode(EvalMode):
         super(C_EvalMode, self).__init__(name='C')
 
         self.ir_func = to_ir(expr)
-
+        # print(expr)
         convert_output_to_target(self.ir_func, 'native')  # Ensure output type is generic_array<float, N>
 
         self.options = {'num_samples': num_samples, 'float_width': 'float'}

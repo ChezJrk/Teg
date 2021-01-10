@@ -1,4 +1,6 @@
-from .lang.integrable_program import *
+from .lang.base import *
+from .lang.teg import *
+from .lang.extended import *
 from .lang.operator_overloads import *
 
 import os

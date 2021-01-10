@@ -19,7 +19,7 @@ class IR_UnaryMath(IR_Instruction):
 
 class IR_Call(IR_Instruction):
     def __init__(self, output, inputs, function):
-        super(IR_Call, self).__init__(output=output, inputs=set(inputs))
+        super(IR_Call, self).__init__(output=output, inputs=inputs)
         self.function = function
 
 
@@ -27,7 +27,7 @@ class IR_Function():
     def __init__(self, instrs, output, inputs, label=None):
         self.instrs = instrs
         self.output = output
-        self.inputs = set(inputs)
+        self.inputs = inputs
         self.label = label
 
     def add_instr(self, instr: IR_Instruction):

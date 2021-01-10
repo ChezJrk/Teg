@@ -1,5 +1,5 @@
 """Add operator overload methods to Teg classes. """
-from .integrable_program import (
+from .base import (
     SmoothFunc,
     ITeg,
     Const,
@@ -7,8 +7,6 @@ from .integrable_program import (
     Add,
     Mul,
     IfElse,
-    Teg,
-    TegVar,
     Tup,
     LetIn,
     Invert,
@@ -21,7 +19,17 @@ from .integrable_program import (
 
 from .markers import (
     Placeholder,
-    TegRemap
+    # TegRemap
+)
+
+from .teg import (
+    Teg,
+    TegVar
+)
+
+from .extended import (
+    BiMap,
+    Delta
 )
 
 from teg.utils import overloads
@@ -90,6 +98,9 @@ class TegOverloads:
     def __ge__(self, other):
         return Bool(other, self, allow_eq=True)
 
+    def __contains__(self, item):
+        return (item == self) or any([item in child for child in self.children])
+
 
 @overloads(Var)
 class TegVariableOverloads:
@@ -110,6 +121,14 @@ class TegVariableOverloads:
     def __ete__(self):
         return f'Var_{self.name}:{self.value}'
 
+    def __hash__(self):
+        return f'{self.name}_{self.uid}'.__hash__()
+
+    def __copy__(self):
+        return Var(name=self.name,
+                   uid=self.uid,
+                   value=self.value)
+
 
 @overloads(TegVar)
 class TegTegVariableOverloads:
@@ -122,7 +141,14 @@ class TegTegVariableOverloads:
         value = '' if self.value is None else f', value={self.value}'
         return f'TegVar(name={self.name}{value}, uid={self.uid})'
 
+    def __copy__(self):
+        e = TegVar(name=self.name,
+                   uid=self.uid)
+        e.__setattr__('value', self.value)
+        return e
 
+
+'''
 @overloads(TegRemap)
 class TegRemapOverloads:
 
@@ -133,6 +159,7 @@ class TegRemapOverloads:
     def __repr__(self):
         value = '' if self.value is None else f', value={self.value}'
         return f'TegVar(name={self.name}{value}, uid={self.uid})'
+'''
 
 
 @overloads(Placeholder)
@@ -148,6 +175,12 @@ class TegPlaceholderOverloads:
     def __repr__(self):
         return f'Placeholder(name={self.name}, signature={self.signature})'
 
+    def __copy__(self):
+        e = Placeholder(name=self.name,
+                        signature=self.signature)
+        e.__setattr__('uid', self.uid)
+        return e
+
 
 @overloads(Const)
 class TegConstantOverloads:
@@ -161,6 +194,12 @@ class TegConstantOverloads:
 
     def __eq__(self, other):
         return self.value == other.value
+
+    def __copy__(self):
+        e = Const(name=self.name,
+                  value=self.value)
+        e.__setattr__('uid', self.uid)
+        return e
 
 
 @overloads(Add)
@@ -276,6 +315,62 @@ class TegLetInOverloads:
                 and len(self.children) == len(other.children)
                 and sum(e1 == e2 for e1, e2 in zip(self.children, other.children)) == len(self.children)
                 and self.new_vars == other.new_vars)
+
+
+@overloads(BiMap)
+class BiMapOverloads:
+
+    def __str__(self):
+        bindings = [f'{var}->{expr}' for var, expr in zip(self.targets, self.target_exprs)]
+        if self.source_exprs:
+            inv_bindings = [f'{var}->{expr}' for var, expr in zip(self.sources, self.source_exprs)]
+        else:
+            inv_bindings = ['no-inverse']
+
+        if len(bindings) == 1:
+            assignments = bindings[0]
+        else:
+            joined_assignments = ',\n\t'.join(bindings)
+            assignments = f'[{joined_assignments}]'
+
+        if len(inv_bindings) == 1:
+            inv_assignments = inv_bindings[0]
+        else:
+            inv_joined_assignments = ',\n\t'.join(inv_bindings)
+            inv_assignments = f'[{inv_joined_assignments}]'
+
+        inv_jacobian = f'invjac = {self.inv_jacobian}' if self.inv_jacobian else 'no-inv_jacobian'
+        target_upper_bounds = f'ubs = {self.target_upper_bounds}' if self.inv_jacobian else 'no-upper-bounds'
+        target_lower_bounds = f'lbs = {self.target_lower_bounds}' if self.inv_jacobian else 'no-lower-bounds'
+
+        return (f'map {assignments} {inv_assignments} in {self.expr} with {inv_jacobian},'
+                f' {target_lower_bounds}, {target_upper_bounds}')
+
+    def __repr__(self):
+        return f'BiMap({repr(self.expr)}, {repr(self.targets)}, {repr(self.target_exprs)}, {repr(self.sources)})'
+
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and len(self.children) == len(other.children)
+                and all(e1 == e2 for e1, e2 in zip(self.children, other.children))
+                and self.sources == other.sources
+                and self.targets == other.targets)
+
+
+@overloads(Delta)
+class DeltaOverloads:
+
+    def __str__(self):
+        delta_symbol = '\u03B4'
+        return f'{delta_symbol}({self.expr})'
+
+    def __repr__(self):
+        return f'Delta({repr(self.expr)})'
+
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and len(self.children) == len(other.children)
+                and self.expr == other.expr)
 
 
 @overloads(ITegBool)

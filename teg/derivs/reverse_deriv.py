@@ -15,13 +15,17 @@ from teg import (
     Teg,
     Tup,
     LetIn,
-    SmoothFunc
+    SmoothFunc,
+    true,
+    false
 )
+from teg.lang.extended import Delta
 
 from teg.passes.substitute import substitute
-from teg.passes.remap import remap, is_remappable
+# from teg.passes.remap import remap, is_remappable
 
-from .edge.rotated import rotated_delta_contribution
+# from .edge.rotated import rotated_delta_contribution
+from .edge.common import primitive_booleans_in
 
 
 def cache(f):
@@ -83,6 +87,14 @@ def reverse_deriv_transform(expr: ITeg,
         yield from ((name_uid, out_deriv_vals * IfElse(expr.cond, Const(0), deriv_else))
                     for name_uid, deriv_else in derivs_else)
 
+        for boolean in primitive_booleans_in(expr.cond, not_ctx):
+            # print(f'Processing boolean.. {boolean}')
+            jump = substitute(expr, boolean, true) - substitute(expr, boolean, false)
+            delta_expr = boolean.right_expr - boolean.left_expr
+            derivs_delta_expr = reverse_deriv_transform(delta_expr, Const(1), not_ctx, teg_list)
+            yield from ((name_uid, out_deriv_vals * deriv_delta_expr * jump * Delta(delta_expr))
+                        for name_uid, deriv_delta_expr in derivs_delta_expr)
+
     elif isinstance(expr, Teg):
         not_ctx.discard((expr.dvar.name, expr.dvar.uid))
 
@@ -97,6 +109,8 @@ def reverse_deriv_transform(expr: ITeg,
                     for name_uid, lower_deriv in lower_derivs)
 
         not_ctx.add((expr.dvar.name, expr.dvar.uid))
+
+        """
         delta_set = rotated_delta_contribution(expr, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
 
         for delta in delta_set:
@@ -113,6 +127,7 @@ def reverse_deriv_transform(expr: ITeg,
                 delta_deriv_list.append((uid, remapping(delta_expr * out_deriv_vals * reduce(operator.add, exprs))))
 
             yield from delta_deriv_list
+        """
 
         deriv_body_traces = reverse_deriv_transform(expr.body,
                                                     Const(1),
@@ -156,10 +171,12 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup, output_list: Optional[List[Va
     Returns:
         Teg: The reverse derivative expression.
     """
+    """
     def remap_all(expr: ITeg):
         while is_remappable(expr):
             expr = remap(expr)
         return expr
+    """
 
     def derivs_for_single_outval(expr: ITeg,
                                  single_outval: Const,
@@ -176,7 +193,7 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup, output_list: Optional[List[Va
         uids = [var_uid for var_name, var_uid in partial_deriv_map.keys()]
         new_vars = [Var(var_name) for var_name, var_uid in partial_deriv_map.keys()]
         new_vals = [*partial_deriv_map.values()]
-        new_vals = [remap_all(e) for e in new_vals]
+        # new_vals = [e for e in new_vals]
 
         if output_list is not None:
             # Return requested list of outputs.

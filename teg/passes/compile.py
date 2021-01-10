@@ -35,13 +35,28 @@ from teg.ir.instr import (
     IR_Pack,
     IR_CompareLT,
     IR_LAnd,
-    IR_LOr
+    IR_LOr,
+    IR_Assign
 )
+
+
+def remove_literals(exprs):
+    return [expr for expr in exprs if not isinstance(expr, IR_Literal)]
+
+
+def make_unique(symbols):
+    new_symbols = []
+    for symbol in symbols:
+        if symbol not in new_symbols:
+            new_symbols.append(symbol)
+    return new_symbols
 
 
 def to_ir(expr: ITeg) -> IR_Function:
     instr_list, out_symbol, free_symbols = _to_ir(expr, {})
-    return IR_Function(instr_list, output=out_symbol, inputs=free_symbols.values(), label='main')
+    return IR_Function(instr_list, output=out_symbol,
+                       inputs=make_unique(remove_literals(free_symbols.values())), label='main')
+# TODO: STOPPED HERE.
 
 
 def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], IR_Variable, Dict[str, IR_Symbol]):
@@ -75,15 +90,20 @@ def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], 
         if_code, if_var, if_symbols = _to_ir(expr.if_body, {**symbols, **cond_symbols})
         else_code, else_var, else_symbols = _to_ir(expr.else_body, {**symbols, **cond_symbols, **if_symbols})
 
-        if_fn = IR_Function(if_code, output=if_var, inputs=if_symbols.values(), label='if_block')
-        else_fn = IR_Function(else_code, output=else_var, inputs=else_symbols.values(), label='else_block')
+        if_fn = IR_Function(if_code, output=if_var, inputs=make_unique(remove_literals(if_symbols.values())),
+                            label='if_block')
+        else_fn = IR_Function(else_code, output=else_var, inputs=make_unique(remove_literals(else_symbols.values())),
+                              label='else_block')
 
         out_var = IR_Variable()
         return ([*cond_code,
                  IR_IfElse(output=out_var,
                            condition=cond_var,
-                           if_call=IR_Call(output=out_var, inputs=if_symbols.values(), function=if_fn),
-                           else_call=IR_Call(output=out_var, inputs=else_symbols.values(), function=else_fn))],
+                           if_call=IR_Call(output=out_var,
+                                           inputs=make_unique(remove_literals(if_symbols.values())), function=if_fn),
+                           else_call=IR_Call(output=out_var,
+                                             inputs=make_unique(remove_literals(else_symbols.values())),
+                                             function=else_fn))],
                 out_var,
                 {**cond_symbols, **if_symbols, **else_symbols})
 
@@ -100,14 +120,18 @@ def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], 
             body_symbols = {**body_symbols,
                             teg_var_label: IR_Variable(label=teg_var_label, var=teg_var, default=None)}
 
-        body_fn = IR_Function(body_code, output=body_var, inputs=body_symbols.values(), label='body_block')
+        body_fn = IR_Function(body_code, output=body_var, inputs=make_unique(remove_literals(body_symbols.values())),
+                              label='body_block')
 
         out_var = IR_Variable()
+        call_out_var = IR_Variable() if isinstance(body_var, IR_Literal) else body_var
 
         return ([*lower_code,
                  *upper_code,
                  IR_Integrate(output=out_var,
-                              call=IR_Call(output=body_var, inputs=body_symbols.values(), function=body_fn),
+                              call=IR_Call(output=call_out_var,
+                                           inputs=make_unique(remove_literals(body_symbols.values())),
+                                           function=body_fn),
                               teg_var=body_symbols[teg_var_label],
                               lower_bound=lower_var,
                               upper_bound=upper_var)],
@@ -144,14 +168,28 @@ def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], 
             all_instrs.extend(expr_list)
             expr_vars.append(expr_var)
 
-        new_symbols = {f'{var.name}_{var.uid}': symbol for var, symbol in zip(expr.new_vars, expr_vars)
-                       if not isinstance(symbol, IR_Literal)}
+        new_symbols = {f'{var.name}_{var.uid}': symbol for var, symbol in zip(expr.new_vars, expr_vars)}
+                       # if not isinstance(symbol, IR_Literal)}
         ctx_symbols = {**symbols, **expr_free_symbols, **new_symbols}
 
         body_list, body_var, body_symbols = _to_ir(expr.expr, ctx_symbols)
 
-        body_fn = IR_Function(body_list, output=body_var, inputs=body_symbols.values(), label='body_block')
-        body_call = IR_Call(output=body_var, inputs=body_symbols.values(), function=body_fn)
+        # print(expr.new_vars)
+        # print(body_symbols.values())
+        # print(new_symbols.values())
+        """
+        for var, symbol in zip(expr.new_vars, expr_vars):
+            var_string = f'{var.name}_{var.uid}'
+            if isinstance(symbol, IR_Literal) and var_string in ctx_symbols.keys():
+                body_list = [IR_Assign(ctx_symbols[var_string], symbol), *body_list]
+        """
+
+        body_fn = IR_Function(body_list, output=body_var,
+                              inputs=make_unique(remove_literals(body_symbols.values())),
+                              label='let_block')
+        body_call = IR_Call(output=body_var,
+                            inputs=make_unique(remove_literals(body_symbols.values())),
+                            function=body_fn)
 
         return ([*all_instrs, body_call],
                 body_var,

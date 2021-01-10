@@ -11,9 +11,9 @@ from teg import (
     SmoothFunc,
     IfElse,
     Teg,
-    TegRemap,
     Tup,
     LetIn,
+    BiMap,
     Or,
     And,
     Bool,
@@ -23,8 +23,12 @@ from teg import (
 
 from teg.derivs import FwdDeriv, RevDeriv
 
-from teg.eval import numpy_eval as evaluate
+from teg.eval import evaluate as evaluate_base
 from teg.passes.substitute import substitute
+
+from functools import partial
+
+evaluate = partial(evaluate_base, backend='numpy')
 
 
 def simplify(expr: ITeg) -> ITeg:
@@ -220,11 +224,23 @@ def simplify(expr: ITeg) -> ITeg:
         non_const_bindings = [(s_var, s_expr) for s_var, s_expr in zip(vars_list, simplified_exprs)
                               if not isinstance(s_expr, Const)]
 
+        child_expr = simplify(child_expr)
         if non_const_bindings:
             non_const_vars, non_const_exprs = zip(*list(non_const_bindings))
-            return LetIn(non_const_vars, non_const_exprs, simplify(child_expr))
+            return (LetIn(non_const_vars, non_const_exprs, child_expr)
+                    if not isinstance(child_expr, Const) else child_expr)
         else:
-            return simplify(child_expr)
+            return child_expr
+
+    elif isinstance(expr, BiMap):
+        simplified_target_exprs = (simplify(e) for e in expr.target_exprs)
+        simplified_source_exprs = (simplify(e) for e in expr.source_exprs)
+
+        child_expr = simplify(expr.expr)
+
+        return BiMap(expr=child_expr,
+                     targets=expr.targets, target_exprs=simplified_target_exprs,
+                     sources=expr.sources, source_exprs=simplified_source_exprs)
 
     elif isinstance(expr, (FwdDeriv, RevDeriv)):
         return simplify(expr.deriv_expr)
@@ -259,6 +275,10 @@ def simplify(expr: ITeg) -> ITeg:
             return Const(evaluate(Or(simple1, simple2)))
         return Or(left_expr, right_expr)
 
+    else:
+        raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported simplify rule')
+
+    """
     elif isinstance(expr, TegRemap):
         return TegRemap(
                         map=expr.map,
@@ -268,6 +288,4 @@ def simplify(expr: ITeg) -> ITeg:
                         upper_bounds=dict([(var, simplify(e)) for var, e in expr.upper_bounds.items()]),
                         source_bounds=expr.source_bounds
                     )
-
-    else:
-        raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported simplify rule')
+    """

@@ -49,7 +49,10 @@ def typename_from_irtype(irtype, float_width='float'):
 
 def tegpass_c(obj: Any, *args, **kwargs):
     assert '__tegpass_c__' in dir(obj), f'Encountered unsupported object {type(obj)}'
-    a,b = obj.__tegpass_c__(*args, **kwargs)
+    a, b = obj.__tegpass_c__(*args, **kwargs)
+
+    if 'None' in a:
+        print(a)
     assert 'None' not in a, f'STOP {type(obj)}'
     return a, b
 
@@ -389,10 +392,14 @@ _INTEGRATOR_MAP = {
         'monte_carlo_uniform': 'monte_carlo.template.c'
     }
 
+# TODO: WARN: STOPPED HERE
+# PROBLEM WITH USING SET() on CALL and FUNC. ORDERS CHANGE. 
+
 
 @overloads(IR_Integrate)
 class CPass_Integrate:
     def __tegpass_c__(self, name_ctx, num_samples=50, **kwargs):
+        # print('CALL: ', type(self.call.output))
         fn_call_code, fn_call_methods = tegpass_c(self.call, name_ctx, **kwargs)
 
         is_code_device = kwargs.get('device_code')
@@ -492,8 +499,12 @@ class CPass_Call:
             # Function call.
             if hasattr(self.function, 'instrs') and not self.function.instrs:
                 # Function is empty. Skip function call.
-                call_code = ''
-                inner_funclist = []
+                if self.output is self.function.output:
+                    call_code = ''
+                    inner_funclist = []
+                else:
+                    call_code, inner_funclist = tegpass_c(IR_Assign(self.output, self.function.output),
+                                                          name_ctx, **kwargs)
             else:
                 input_strings = [f'{c_symbolstring(symbol, name_ctx, **kwargs)},' for symbol in self.inputs]
                 input_list = ''.join(input_strings)
@@ -567,7 +578,8 @@ class CPass_Function:
                         for symbol in symbols_to_decl
                         if c_declstring(symbol, name_ctx, **kwargs)]
         decl_list = ''.join(decl_strings)
-        output_decl_string = f'\t{c_declstring(self.output, name_ctx, **kwargs)};\n'
+        output_decl_string = (f'\t{c_declstring(self.output, name_ctx, **kwargs)};\n' if
+                              c_declstring(self.output, name_ctx, **kwargs) else '')
 
         input_strings = [f'{c_declstring(symbol, name_ctx, **kwargs)},'
                          for symbol in self.inputs
@@ -606,12 +618,12 @@ class CPass_Function:
 
 
 def convert_output_to_target(ir_func, target='py'):
-    if ir_func.output.ctype_mode() == target:
+    if isinstance(ir_func.output, IR_Variable) and ir_func.output.ctype_mode() == target:
         return
 
-    new_output = IR_Variable(label=ir_func.output.label,
-                             default=ir_func.output.default,
-                             var=ir_func.output._teg_var)
+    new_output = IR_Variable(label=ir_func.output.label if hasattr(ir_func.output, 'label') else None,
+                             default=ir_func.output.default if hasattr(ir_func.output, 'default') else None,
+                             var=ir_func.output._teg_var if hasattr(ir_func.output, 'default') else None)
     new_output.set_ctype_mode(target)
 
     ir_func.instrs.append(IR_Assign(output=new_output, input=ir_func.output))

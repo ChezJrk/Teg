@@ -70,3 +70,25 @@ def moving_discontinuities_in_boolean(expr: ITegBool,
 
     else:
         raise ValueError('Illegal expression in boolean.')
+
+
+def primitive_booleans_in(expr: ITegBool,
+                          not_ctx: Set[Tuple[str, int]]) -> Iterable[ITeg]:
+    if isinstance(expr, Bool):
+        var_name_var_in_cond = extract_variables_from_affine(expr.left_expr - expr.right_expr)
+        moving_var_name_uids = var_name_var_in_cond.keys() - not_ctx
+
+        # print(f'vnvic {var_name_var_in_cond}')
+        # print(moving_var_name_uids)
+        # Check that the variable var is in the condition
+        # and another variable not in not_ctx is in the condition
+        if ((set(var_name_var_in_cond.keys()) & not_ctx)
+           and len(moving_var_name_uids) > 0):
+            yield expr
+
+    elif isinstance(expr, (And, Or)):
+        yield from primitive_booleans_in(expr.left_expr, not_ctx)
+        yield from primitive_booleans_in(expr.right_expr, not_ctx)
+
+    else:
+        raise ValueError('Illegal expression in boolean.')

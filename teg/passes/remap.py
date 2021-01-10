@@ -46,7 +46,7 @@ def resolve_placeholders(expr: ITeg,
 
 def remap(expr: ITeg):
     """
-        Performs a remap pass. 
+        Performs a remap pass.
         Eliminates 'TegRemap' nodes by lifting the subtree to the top level
         of the tree and applying variable rewrites to them.
     """
