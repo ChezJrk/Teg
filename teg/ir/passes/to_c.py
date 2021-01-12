@@ -392,9 +392,6 @@ _INTEGRATOR_MAP = {
         'monte_carlo_uniform': 'monte_carlo.template.c'
     }
 
-# TODO: WARN: STOPPED HERE
-# PROBLEM WITH USING SET() on CALL and FUNC. ORDERS CHANGE. 
-
 
 @overloads(IR_Integrate)
 class CPass_Integrate:
@@ -544,6 +541,9 @@ class CPass_Call:
 
     def __c_gather_symbols__(self):
         if self.c_inline or not (hasattr(self.function, 'instrs') and not self.function.instrs):
+            yield from c_gather_symbols(self.output)
+        elif ((hasattr(self.function, 'instrs') and not self.function.instrs) and
+              self.output is not self.function.output):
             yield from c_gather_symbols(self.output)
 
 

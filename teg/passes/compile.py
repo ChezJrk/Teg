@@ -187,12 +187,13 @@ def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], 
         body_fn = IR_Function(body_list, output=body_var,
                               inputs=make_unique(remove_literals(body_symbols.values())),
                               label='let_block')
-        body_call = IR_Call(output=body_var,
+        call_out_var = IR_Variable() if isinstance(body_var, IR_Literal) else body_var
+        body_call = IR_Call(output=call_out_var,
                             inputs=make_unique(remove_literals(body_symbols.values())),
                             function=body_fn)
 
         return ([*all_instrs, body_call],
-                body_var,
+                call_out_var,
                 {**expr_free_symbols,
                  **{label: symbol for label, symbol in body_symbols.items() if label not in new_symbols.keys()}})
 
@@ -230,4 +231,4 @@ def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], 
         return code, out_var, {**left_symbols, **right_symbols}
 
     else:
-        raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported derivative.')
+        raise ValueError(f'The type of the expr "{type(expr)}" cannot be expressed in IR.')

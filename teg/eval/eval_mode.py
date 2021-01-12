@@ -3,5 +3,5 @@ class EvalMode():
         self.name = name
         pass
 
-    def eval(self, *kwargs):
+    def eval(self, bindings, **kwargs):
         raise NotImplementedError('This backend does not support evaluation')

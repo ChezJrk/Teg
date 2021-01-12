@@ -193,7 +193,7 @@ class TegConstantOverloads:
         return f'Const(value={self.value}{name})'
 
     def __eq__(self, other):
-        return self.value == other.value
+        return (type(self) == type(other)) and self.value == other.value
 
     def __copy__(self):
         e = Const(name=self.name,
@@ -343,8 +343,9 @@ class BiMapOverloads:
         target_upper_bounds = f'ubs = {self.target_upper_bounds}' if self.inv_jacobian else 'no-upper-bounds'
         target_lower_bounds = f'lbs = {self.target_lower_bounds}' if self.inv_jacobian else 'no-lower-bounds'
 
-        return (f'map {assignments} {inv_assignments} in {self.expr} with {inv_jacobian},'
-                f' {target_lower_bounds}, {target_upper_bounds}')
+        return (f'map({id(self)}) {assignments} {inv_assignments} in {self.expr}')
+                # f' with {inv_jacobian},'
+                # f' {target_lower_bounds}, {target_upper_bounds}')
 
     def __repr__(self):
         return f'BiMap({repr(self.expr)}, {repr(self.targets)}, {repr(self.target_exprs)}, {repr(self.sources)})'

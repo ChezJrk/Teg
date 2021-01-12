@@ -193,7 +193,6 @@ class TypingPass_UnaryMath:
             output_size = self.fn_class.output_size(input_type.size)
         else:
             output_size = input_type.size
-
         self.output.set_irtype(IR_Type(ctype=input_type.ctype, size=output_size))
 
 

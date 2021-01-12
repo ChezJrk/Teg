@@ -21,7 +21,13 @@ from teg import (
     false,
 )
 
+from teg.lang.extended import (
+    Delta,
+    BiMap
+)
+
 from teg.derivs import FwdDeriv, RevDeriv
+
 
 from teg.eval import evaluate as evaluate_base
 from teg.passes.substitute import substitute
@@ -93,9 +99,7 @@ def simplify(expr: ITeg) -> ITeg:
                 return simple1 + simple2
 
         if isinstance(simple1, IfElse) and isinstance(simple2, IfElse):
-            # print(f"Matching IfElse statements, \n{simple1.cond} \n{simple2.cond}")
             if simple1.cond == simple2.cond:
-                # print(f"Matched IfElse statements, \n{simple1.cond} \n{simple2.cond}")
                 return IfElse(
                               simple1.cond,
                               simplify(simple1.if_body + simple2.if_body),
@@ -157,6 +161,7 @@ def simplify(expr: ITeg) -> ITeg:
                 return simple1 * simple2
 
             # Compress const nodes.
+            # import ipdb; ipdb.set_trace()
             const_node = Const(evaluate(reduce(operator.mul, const_nodes)))
 
             # Re-order to front.
@@ -236,11 +241,21 @@ def simplify(expr: ITeg) -> ITeg:
         simplified_target_exprs = (simplify(e) for e in expr.target_exprs)
         simplified_source_exprs = (simplify(e) for e in expr.source_exprs)
 
+        simplified_ubs = (simplify(e) for e in expr.target_upper_bounds)
+        simplified_lbs = (simplify(e) for e in expr.target_lower_bounds)
+
         child_expr = simplify(expr.expr)
 
         return BiMap(expr=child_expr,
                      targets=expr.targets, target_exprs=simplified_target_exprs,
-                     sources=expr.sources, source_exprs=simplified_source_exprs)
+                     sources=expr.sources, source_exprs=simplified_source_exprs,
+                     inv_jacobian=simplify(expr.inv_jacobian),
+                     target_lower_bounds=simplified_lbs,
+                     target_upper_bounds=simplified_ubs
+                     )
+
+    elif isinstance(expr, Delta):
+        return Delta(simplify(expr.expr))
 
     elif isinstance(expr, (FwdDeriv, RevDeriv)):
         return simplify(expr.deriv_expr)

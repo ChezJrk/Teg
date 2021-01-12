@@ -127,13 +127,14 @@ class C_EvalMode(EvalMode):
 
         self.compiled = True
 
-    def eval(self, **kwargs):
+    def eval(self, bindings={}, **kwargs):
         if not self.preprocessed:
             self._preprocess()
         if not self.compiled:
             self._compile()
 
-        args = [kwargs[arg] if arg in kwargs.keys() else teg_var.value for arg, default, teg_var in self.arglist]
+        bindings = {f'{k.name}_{k.uid}': v for k, v in bindings.items()}
+        args = [bindings[arg] if arg in bindings.keys() else teg_var.value for arg, default, teg_var in self.arglist]
 
         assert os.path.exists(self.module_filename), f'Could not find binary {self.module_filename}'
 
@@ -255,7 +256,7 @@ class C_EvalMode_PyBind(EvalMode):
         # os.remove(self.out_filename)
         self.loaded = True
 
-    def eval(self, **kwargs):
+    def eval(self, bindings={}, **kwargs):
         if not self.preprocessed:
             self._preprocess()
         if not self.compiled:
@@ -263,7 +264,8 @@ class C_EvalMode_PyBind(EvalMode):
         if not self.loaded:
             self._load()
 
-        args = [kwargs[arg] if arg in kwargs.keys() else teg_var.value for arg, default, teg_var in self.arglist]
+        bindings = {f'{k.name}_{k.uid}': v for k, v in bindings.items()}
+        args = [bindings[arg] if arg in bindings.keys() else teg_var.value for arg, default, teg_var in self.arglist]
 
         assert all([arg is not None for arg in args]),\
                f'Could not resolve all arguments {zip(args, kwargs.keys())}'

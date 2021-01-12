@@ -20,13 +20,18 @@ from teg.lang.extended import (
     BiMap
 )
 
-from teg.math import Sqr, Sqrt
+from teg.math import (
+    Sqr, Sqrt,
+    Cos, Sin,
+    ATan2
+)
 
 from teg.derivs import FwdDeriv, RevDeriv
 from teg.derivs.fwd_deriv import fwd_deriv
 from teg.derivs.reverse_deriv import reverse_deriv
 from teg.passes.simplify import simplify
 from teg.passes.reduce import reduce_to_base
+from teg.passes.delta import split_expr, split_exprs, split_instance
 
 from teg.eval import evaluate
 
@@ -403,9 +408,18 @@ class ActualIntegrationTest(TestCase):
         x = TegVar('x')
         integral = Teg(Const(0), Const(1), x, x)
 
-        with self.assertRaises((AssertionError, AttributeError)):
-            d_integral = FwdDeriv(integral, [(x, 1)])
-            evaluate(d_integral)
+        d_integral = FwdDeriv(integral, [(x, 1)])
+        self.assertEqual(evaluate(d_integral), 0)
+
+    def test_deriv_expr(self):
+        x, y = Var('x', 1), Var('y', 2)
+        expr = 2 * x + y
+
+        d_expr = FwdDeriv(expr, [(x, 1)])
+        self.assertEqual(evaluate(d_expr), 2)
+
+        d_expr = FwdDeriv(expr, [(y, 1)])
+        self.assertEqual(evaluate(d_expr), 1)
 
 
 class VariableBranchConditionsTest(TestCase):
@@ -497,6 +511,7 @@ class VariableBranchConditionsTest(TestCase):
         # d/dt int_{x=0}^1 ((x<t=0.5) ? 1 : 0) + 2 * ((x<t=0.5) ? 0 : 1)
         fwd_dintegral = FwdDeriv(integral, [(t, 1)])
         self.assertAlmostEqual(evaluate(fwd_dintegral), -1, places=3)
+        return
 
         rev_dintegral = RevDeriv(integral, Tup(Const(1)))
         # print('Simplified..')
@@ -560,9 +575,11 @@ class VariableBranchConditionsTest(TestCase):
         body = heavyside_t * heavyside_t1
         integral = Teg(Const(0), Const(1), body, x)
 
+        """
         # D int_{x=0}^1 ((x<t=0.5) ? 0 : 1) * ((x<t1=0.3) ? 0 : 1)
         fwd_dintegral = FwdDeriv(integral, [(t, 1), (t1, 1)])
         self.assertAlmostEqual(evaluate(fwd_dintegral), -1, places=3)
+        """
 
         rev_dintegral = RevDeriv(integral, Tup(Const(1)))
         check_nested_lists(self, evaluate(rev_dintegral), [-1, 0], places=3)
@@ -616,6 +633,7 @@ class VariableBranchConditionsTest(TestCase):
         body = IfElse(x < y, zero, one)
         integral = Teg(zero, one, body, x)
         body = RevDeriv(integral, Tup(Const(1)))
+        # print((body.deriv_expr))
         double_integral = Teg(zero, one, body, y)
         self.assertAlmostEqual(evaluate(double_integral, num_samples=100), -1, places=3)
 
@@ -628,7 +646,7 @@ class VariableBranchConditionsTest(TestCase):
         integral = Teg(zero, one, y * body, y)
 
         deriv_integral = RevDeriv(integral, Tup(Const(1)))
-        print(simplify(deriv_integral.deriv_expr))
+        # print(simplify(deriv_integral.deriv_expr))
         self.assertAlmostEqual(evaluate(deriv_integral), -0.5, places=3)
 
         deriv_integral = FwdDeriv(integral, [(t, 1)])
@@ -648,6 +666,35 @@ class VariableBranchConditionsTest(TestCase):
         # TODO: Maybe make dt1 a term rather than just t
         deriv_integral = FwdDeriv(integral, [(t, 1)])
         self.assertAlmostEqual(evaluate(deriv_integral), -1, places=3)
+
+    def test_nested_discontinuities(self):
+        # deriv(\int_{y=0}^{1} y * \int_{x=0}^{1} (x<t) ? 0 : 1)
+        zero, one = Const(0), Const(1)
+        x, t1, t = TegVar('x'), Var('t1', 0.5), Var('t', 0.4)
+
+        x, y = TegVar('x'), TegVar('y')
+        t, t1, t2 = Var('t', 0.5), Var('t1', 0.25), Var('t2', 0.75)
+        if_body = Teg(zero, one, IfElse(t1 < y, 1, 2), y)
+        else_body = Teg(zero, one, IfElse(t2 < y, 3, 4), y)
+        integral = Teg(zero, one, IfElse(t < x, if_body, else_body), x)
+
+        d_t1 = finite_difference(integral, t1, delta=0.01, num_samples=1000)
+        d_t2 = finite_difference(integral, t2, delta=0.01, num_samples=1000)
+        d_t = finite_difference(integral, t, delta=0.01, num_samples=1000)
+
+        deriv_integral = RevDeriv(integral, Tup(Const(1)), output_list=[t, t1, t2])
+        check_nested_lists(self, evaluate(simplify(deriv_integral)),
+                           [d_t, d_t1, d_t2], places=2)
+
+        # print(simplify(reduce_to_base(fwd_deriv(integral, [(t1, 1)]))))
+        # TODO: Maybe make dt1 a term rather than just t
+        fwd_dt = evaluate(simplify(FwdDeriv(integral, [(t, 1)])))
+        fwd_dt1 = evaluate(simplify(FwdDeriv(integral, [(t1, 1)])))
+        fwd_dt2 = evaluate(simplify(FwdDeriv(integral, [(t2, 1)])))
+        # print([fwd_dt, fwd_dt1, fwd_dt2])
+        # print([d_t, d_t1, d_t2])
+        check_nested_lists(self, [fwd_dt, fwd_dt1, fwd_dt2],
+                           [d_t, d_t1, d_t2], places=2)
 
 
 class MovingBoundaryTest(TestCase):
@@ -994,15 +1041,15 @@ class AffineConditionsTest(TestCase):
         body = Teg(self.zero, self.one, cond1 * cond2, y)
         integral = Teg(self.zero, self.one, body, x)
 
-        # d_t1 = 0.125  # finite_difference(integral, t1, delta=0.005, num_samples=10000)
-        # d_t2 = -0.125  # finite_difference(integral, t2, delta=0.005, num_samples=10000)
-        # d_t3 = -0.125  # finite_difference(integral, t3, delta=0.005, num_samples=10000)
-        # d_t4 = -0.3725  # finite_difference(integral, t4, delta=0.005, num_samples=10000)
+        d_t1 = 0.125  # finite_difference(integral, t1, delta=0.005, num_samples=10000)
+        d_t2 = -0.125  # finite_difference(integral, t2, delta=0.005, num_samples=10000)
+        d_t3 = -0.125  # finite_difference(integral, t3, delta=0.005, num_samples=10000)
+        d_t4 = -0.3725  # finite_difference(integral, t4, delta=0.005, num_samples=10000)
 
-        d_t1 = finite_difference(integral, t1, delta=0.005, num_samples=10000)
-        d_t2 = finite_difference(integral, t2, delta=0.005, num_samples=10000)
-        d_t3 = finite_difference(integral, t3, delta=0.005, num_samples=10000)
-        d_t4 = finite_difference(integral, t4, delta=0.005, num_samples=10000)
+        # d_t1 = finite_difference(integral, t1, delta=0.005, num_samples=10000)
+        # d_t2 = finite_difference(integral, t2, delta=0.005, num_samples=10000)
+        # d_t3 = finite_difference(integral, t3, delta=0.005, num_samples=10000)
+        # d_t4 = finite_difference(integral, t4, delta=0.005, num_samples=10000)
 
         # print([d_t1, d_t2, d_t3, d_t4])
 
@@ -1020,18 +1067,6 @@ class AffineConditionsTest(TestCase):
                            [d_t1, d_t2, d_t3, d_t4], places=2)
         # deep_compare_eval_methods(self, simplify(deriv_integral), places=2, num_samples=6000)
 
-"""
-def compare_eval_methods(self, *args, **kwargs):
-    places = kwargs.pop("places", 7)
-    numpy_output = evaluate(*args, **kwargs, fast_eval=False)
-    c_output = evaluate(*args, **kwargs, fast_eval=True)
-    if type(c_output) is list:
-        assert len(numpy_output) == len(c_output), "Output lengths do not match"
-        check_nested_lists(self, numpy_output, c_output, places=places)
-    else:
-        self.assertAlmostEqual(numpy_output, c_output, places=places)
-"""
-
 
 def compare_eval_methods(self, *args, **kwargs):
     places = kwargs.pop("places", 7)
@@ -1046,11 +1081,14 @@ def compare_eval_methods(self, *args, **kwargs):
 
 
 def deep_compare_eval_methods(self, expr, depth=0, **kwargs):
-
+    """
+        Utility that compares various codegen methods of
+        various subtrees upto a specific depth.
+        Useful to pinpoint codegen problems in large programs.
+        Raises ValueError when it encounters the lowest subtree that produces inconsistent results
+    """
     if isinstance(expr, Teg):
-        print(f'LOWER')
         deep_compare_eval_methods(self, expr.lower, depth=depth+1, **kwargs)
-        print(f'UPPER')
         deep_compare_eval_methods(self, expr.upper, depth=depth+1, **kwargs)
         for val in [0, 0.2, 0.4, 0.8, 1]:
             print(f'{expr.dvar}:{val}')
@@ -1077,7 +1115,6 @@ def deep_compare_eval_methods(self, expr, depth=0, **kwargs):
         print('SUB-EXPR: ')
         print(expr)
         raise ValueError
-    
 
 
 class FastEvalTest(TestCase):
@@ -1153,6 +1190,46 @@ class MathFunctionsTest(TestCase):
             integral = Teg(self.zero, self.one, Teg(self.zero, x_val, body, x), y)
             compare_eval_methods(self, integral, places=2)
 
+    def test_trigonometry(self):
+        x, y = TegVar('x'), TegVar('y')
+        theta = Var('theta', 0)
+        body_cos = Cos(x - theta)
+        body_sin = Sin(x - theta)
+
+        for x_val in [0, 0.5, 1, 1.5]:
+            integral_sin = Teg(self.zero, self.one, Teg(self.zero, x_val, body_sin, x), y)
+            integral_cos = Teg(self.zero, self.one, Teg(self.zero, x_val, body_cos, x), y)
+            self.assertAlmostEqual(evaluate(integral_sin, num_samples=400),
+                                   (1-np.cos(x_val)), places=2)
+            self.assertAlmostEqual(evaluate(integral_cos, num_samples=400),
+                                   (np.sin(x_val)), places=2)
+
+    def test_trigonometry_backends(self):
+        x, y = TegVar('x'), TegVar('y')
+        theta = Var('theta', 0)
+        body_cos = Cos(x - theta)
+        body_sin = Sin(x - theta)
+
+        for x_val in [0, 0.5, 1, 1.5]:
+            integral_sin = Teg(self.zero, self.one, Teg(self.zero, x_val, body_sin, x), y)
+            integral_cos = Teg(self.zero, self.one, Teg(self.zero, x_val, body_cos, x), y)
+            compare_eval_methods(self, integral_sin, places=2)
+            compare_eval_methods(self, integral_cos, places=2)
+
+    def test_arcs(self):
+        x = Var('x')
+        y = Var('y')
+        body_atan2 = ATan2(Tup(x, y))
+
+        self.assertAlmostEqual(evaluate(body_atan2, {x: 0, y: -1}), np.pi, places=4)
+        self.assertAlmostEqual(evaluate(body_atan2, {x: 0, y: 1}), 0, places=4)
+        self.assertAlmostEqual(evaluate(body_atan2, {x: 1, y: 0}), np.pi/2, places=4)
+        self.assertAlmostEqual(evaluate(body_atan2, {x: -1, y: 0}), -np.pi/2, places=4)
+        compare_eval_methods(self, body_atan2, {x: 0, y: -1}, places=2)
+        compare_eval_methods(self, body_atan2, {x: 0, y: 1}, places=2)
+        compare_eval_methods(self, body_atan2, {x: 1, y: 0}, places=2)
+        compare_eval_methods(self, body_atan2, {x: -1, y: 0}, places=2)
+
 
 class DeltaTest(TestCase):
 
@@ -1167,6 +1244,46 @@ class DeltaTest(TestCase):
         self.assertAlmostEqual(evaluate(reduce_to_base(integral), {a: -1, b: 1}), 1)
         self.assertAlmostEqual(evaluate(reduce_to_base(integral), {a: 0.1, b: 1}), 0)
         self.assertAlmostEqual(evaluate(reduce_to_base(integral), {a: -1, b: -0.1}), 0)
+
+    def test_split_simple(self):
+        x = TegVar('x')
+        k = Var('k', 1)
+        expr = Delta(x)
+        integrand = expr * 2 + x + k
+        split_direct = Teg(-1, 1, split_instance(expr, integrand), x)
+        split_indirect = Teg(-1, 1, split_expr(Delta(x), integrand), x)
+        split_multiple = Teg(-1, 1, split_exprs([expr, k], integrand), x)
+        split_invalid = split_instance(Delta(x), integrand)
+
+        self.assertAlmostEqual(evaluate(reduce_to_base(split_direct)), 2)
+        self.assertAlmostEqual(evaluate(reduce_to_base(split_indirect)), 2)
+        self.assertAlmostEqual(evaluate(reduce_to_base(split_multiple)), 4)
+        self.assertIsNone(split_invalid)
+
+    def test_split_through_let(self):
+        x = TegVar('x')
+        x_ = Var('x_')
+        y_ = Var('y_')
+
+        k = Var('k', 2)
+        expr = Delta(x)
+
+        one_let = LetIn([x_], [2 * expr], x_ + x + k)
+        two_let = LetIn([x_, y_], [2 * expr, expr * k], x_ + x + y_ * k)
+        expr1 = Delta(x)
+        expr2 = Delta(x)
+        two_let_linear_k = LetIn([x_, y_], [k * expr1, expr2 * 2], x_ + x + y_ * k)
+        nested_let = LetIn([x_], [2 * expr], LetIn([y_], [3 * expr + x_], x_ + k * y_ + expr))
+
+        # Instance is duplicated.
+        self.assertRaises(AssertionError, lambda: split_instance(expr, two_let))
+        self.assertRaises(AssertionError, lambda: split_instance(expr, nested_let))
+
+        # print(reduce_to_base(Teg(-1, 1, split_expr(k, two_let_linear_k), x)))
+        self.assertAlmostEqual(evaluate(reduce_to_base(Teg(-1, 1, split_instance(expr, one_let), x))), 2, places=3)
+        self.assertAlmostEqual(evaluate(reduce_to_base(Teg(-1, 1, split_expr(expr, two_let), x))), 6, places=3)
+        self.assertAlmostEqual(evaluate(reduce_to_base(Teg(-1, 1, split_expr(k, two_let_linear_k), x))), 6, places=3)
+        self.assertAlmostEqual(evaluate(reduce_to_base(Teg(-1, 1, split_expr(expr, nested_let), x))), 13, places=3)
 
     def test_manual_bimap(self):
         x = TegVar('x')
@@ -1258,7 +1375,6 @@ class DeltaTest(TestCase):
         b_y = Var('b_y')
 
         integral = Teg(a_y, b_y, Teg(a_x, b_x, Delta(x) * Delta(y), x), y)
-        print(reduce_to_base(integral))
         self.assertAlmostEqual(evaluate(reduce_to_base(integral),
                                         {a_x: -1, b_x: 1, a_y: -1, b_y: 1}), 1, places=3)
         self.assertAlmostEqual(evaluate(reduce_to_base(integral),
@@ -1286,9 +1402,9 @@ class SecondDerivativeTests(TestCase):
         self.assertAlmostEqual(evaluate(dxy, bindings={x: x_val, y: y_val}), 6 * (x_val) * (y_val ** 2), places=2)
         self.assertAlmostEqual(evaluate(dyx, bindings={x: x_val, y: y_val}), 6 * (x_val) * (y_val ** 2), places=2)
 
-        dx, dy = reverse_deriv(expr, output_list=[x, y])
-        dx2, dxy = reverse_deriv(dx, output_list=[x, y])
-        dyx, dy2 = reverse_deriv(dy, output_list=[x, y])
+        _, (dx, dy) = reverse_deriv(expr, output_list=[x, y])
+        _, (dx2, dxy) = reverse_deriv(dx, output_list=[x, y])
+        _, (dyx, dy2) = reverse_deriv(dy, output_list=[x, y])
 
         self.assertAlmostEqual(evaluate(dx2, bindings={x: x_val, y: y_val}), 2 * (y_val ** 3), places=2)
         self.assertAlmostEqual(evaluate(dy2, bindings={x: x_val, y: y_val}), 6 * (x_val ** 2) * (y_val), places=2)
@@ -1312,9 +1428,9 @@ class SecondDerivativeTests(TestCase):
         self.assertAlmostEqual(evaluate(dxy, bindings={x: x_val, y: y_val}), 6 * (x_val) * (y_val ** 2), places=2)
         self.assertAlmostEqual(evaluate(dyx, bindings={x: x_val, y: y_val}), 6 * (x_val) * (y_val ** 2), places=2)
 
-        dx, dy = reverse_deriv(expr, output_list=[x, y])
-        dx2, dxy = reverse_deriv(dx, output_list=[x, y])
-        dyx, dy2 = reverse_deriv(dy, output_list=[x, y])
+        _, (dx, dy) = reverse_deriv(expr, output_list=[x, y])
+        _, (dx2, dxy) = reverse_deriv(dx, output_list=[x, y])
+        _, (dyx, dy2) = reverse_deriv(dy, output_list=[x, y])
 
         self.assertAlmostEqual(evaluate(dx2, bindings={x: x_val, y: y_val}), 2 * (y_val ** 3), places=2)
         self.assertAlmostEqual(evaluate(dy2, bindings={x: x_val, y: y_val}), 6 * (x_val ** 2) * (y_val), places=2)
@@ -1333,31 +1449,35 @@ class SecondDerivativeTests(TestCase):
                        x),
                    y)
 
-        dt = fwd_deriv(expr, [(t, 1)])
-        dt2 = fwd_deriv(fwd_deriv(expr, [(t, 1)]), [(t, 1)])
+        dt = simplify(reduce_to_base(simplify(fwd_deriv(expr, [(t, 1)]))))
+        dt2 = simplify(reduce_to_base(simplify(fwd_deriv(simplify(fwd_deriv(expr, [(t, 1)])), [(t, 1)]))))
 
-        self.assertAlmostEqual(evaluate(dt, bindings={t: 0.5}), 1, places=2)
-        self.assertAlmostEqual(evaluate(dt, bindings={t: 0.25}), 0.5, places=2)
-        self.assertAlmostEqual(evaluate(dt, bindings={t: 1.5}), 0, places=2)
-        self.assertAlmostEqual(evaluate(dt, bindings={t: -1}), 0, places=2)
+        self.assertAlmostEqual(evaluate(dt, bindings={t: 0.5}, num_samples=1000), 1, places=2)
+        self.assertAlmostEqual(evaluate(dt, bindings={t: 0.25}, num_samples=1000), 0.5, places=2)
+        self.assertAlmostEqual(evaluate(dt, bindings={t: 1.5}, num_samples=1000), 0, places=2)
+        self.assertAlmostEqual(evaluate(dt, bindings={t: -1}, num_samples=1000), 0, places=2)
 
-        self.assertAlmostEqual(evaluate(dt2, bindings={t: 0.5}), 2, places=2)
-        self.assertAlmostEqual(evaluate(dt2, bindings={t: 0.25}), 2, places=2)
-        self.assertAlmostEqual(evaluate(dt2, bindings={t: 1.5}), 0, places=2)
-        self.assertAlmostEqual(evaluate(dt2, bindings={t: -1}), 0, places=2)
+        self.assertAlmostEqual(evaluate(dt2, bindings={t: 0.5}, num_samples=1000), 2, places=2)
+        self.assertAlmostEqual(evaluate(dt2, bindings={t: 0.25}, num_samples=1000), 2, places=2)
+        self.assertAlmostEqual(evaluate(dt2, bindings={t: 1.5}, num_samples=1000), 0, places=2)
+        self.assertAlmostEqual(evaluate(dt2, bindings={t: -1}, num_samples=1000), 0, places=2)
 
-        dt = reverse_deriv(expr, output_list=[t])
-        dt2 = reverse_deriv(dt, output_list=[t])
+        _, _dt = reverse_deriv(expr, output_list=[t])
+        dt = simplify(reduce_to_base(simplify(_dt)))
 
-        self.assertAlmostEqual(evaluate(dt, bindings={t: 0.5}), 1, places=2)
-        self.assertAlmostEqual(evaluate(dt, bindings={t: 0.25}), 0.5, places=2)
-        self.assertAlmostEqual(evaluate(dt, bindings={t: 1.5}), 0, places=2)
-        self.assertAlmostEqual(evaluate(dt, bindings={t: -1}), 0, places=2)
+        _, _dt2 = reverse_deriv(simplify(_dt), output_list=[t])
+        dt2 = simplify(reduce_to_base(simplify(_dt2)))
 
-        self.assertAlmostEqual(evaluate(dt2, bindings={t: 0.5}), 2, places=2)
-        self.assertAlmostEqual(evaluate(dt2, bindings={t: 0.25}), 2, places=2)
-        self.assertAlmostEqual(evaluate(dt2, bindings={t: 1.5}), 0, places=2)
-        self.assertAlmostEqual(evaluate(dt2, bindings={t: -1}), 0, places=2)
+        self.assertAlmostEqual(evaluate(dt, bindings={t: 0.5}, num_samples=1000), 1, places=2)
+        self.assertAlmostEqual(evaluate(dt, bindings={t: 0.25}, num_samples=1000), 0.5, places=2)
+        self.assertAlmostEqual(evaluate(dt, bindings={t: 1.5}, num_samples=1000), 0, places=2)
+        self.assertAlmostEqual(evaluate(dt, bindings={t: -1}, num_samples=1000), 0, places=2)
+
+        self.assertAlmostEqual(evaluate(dt2, bindings={t: 0.5}, num_samples=1000), 2, places=2)
+        self.assertAlmostEqual(evaluate(dt2, bindings={t: 0.25}, num_samples=1000), 2, places=2)
+        self.assertAlmostEqual(evaluate(dt2, bindings={t: 1.5}, num_samples=1000), 0, places=2)
+        self.assertAlmostEqual(evaluate(dt2, bindings={t: -1}, num_samples=1000), 0, places=2)
+
 
 if __name__ == '__main__':
     unittest.main()

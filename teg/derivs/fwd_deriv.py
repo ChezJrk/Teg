@@ -54,18 +54,8 @@ def fwd_deriv_transform(expr: ITeg,
                         ) -> Tuple[ITeg, Dict[Tuple[str, int], str], Set[Tuple[str, int]]]:
     """Compute the source-to-source foward derivative of the given expression."""
     if isinstance(expr, TegVar):
-        if (expr.name, expr.uid) not in not_ctx:
-            if (expr.name, expr.uid) not in ctx:
-
-                # Introduce derivative and leave the value unbound
-                var = Var(f'd{expr.name}')
-                ctx[(expr.name, expr.uid)] = var
-                # print('TEGVAR-GEN')
-                # print(f'{expr.name}: {ctx}')
-            else:
-                # Use the old derivative
-                var = ctx[(expr.name, expr.uid)]
-            expr = var
+        if (expr.name, expr.uid) not in not_ctx and (expr.name, expr.uid) in ctx:
+            expr = ctx[(expr.name, expr.uid)]
         else:
             expr = Const(0)
 
@@ -78,24 +68,16 @@ def fwd_deriv_transform(expr: ITeg,
     elif isinstance(expr, BiMap):
         # No derivative requirement.
         # BiMaps are only for TegVars and they shouldn't have derivatives.
+        # TODO: Figure this out.
         pass
 
     elif isinstance(expr, Delta):
-        assert False, "Cannot take the derivative of a Delta. Reduce all Deltas first"
+        # assert False, "Cannot take the derivative of a Delta. Reduce all Deltas first"
+        expr = Const(0)
 
     elif isinstance(expr, Var):
-        # NOTE: No expressions with the name "d{expr.name}" are allowed
-        if (expr.name, expr.uid) not in not_ctx:
-            if (expr.name, expr.uid) not in ctx:
-                # Introduce derivative and leave the value unbound
-                var = Var(f'd{expr.name}')
-                ctx[(expr.name, expr.uid)] = var
-                # print('TEGVAR-GEN')
-                # print(f'{expr.name}, {ctx}')
-            else:
-                # Use the old derivative
-                var = ctx[(expr.name, expr.uid)]
-            expr = var
+        if (expr.name, expr.uid) not in not_ctx and (expr.name, expr.uid) in ctx:
+            expr = ctx[(expr.name, expr.uid)]
         else:
             expr = Const(0)
 
@@ -239,22 +221,18 @@ def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]]) -> ITeg:
         Teg: The forward fwd_derivative expression.
     """
     binding_map = {(var.name, var.uid): val for var, val in bindings}
+    ctx_map = {(var.name, var.uid): Var(f'd{var.name}') for var, _ in bindings}
 
     # print('OLD: ')
     # print(expr)
     # After fwd_deriv_transform, expr will have unbound infinitesimals
-    full_expr, ctx, not_ctx, _ = fwd_deriv_transform(expr, {}, set(), set())
+    full_expr, ctx, not_ctx, _ = fwd_deriv_transform(expr, ctx_map, set(), set())
 
     # Resolve all TegRemap expressions by lifting expressions
     # out of the tree.
     expr = full_expr
     # while is_remappable(expr):
     #    expr = remap(expr)
-
-    # print('DERIV:')
-    # print(expr)
-    assert binding_map.keys() == ctx.keys(), (f'You provided bindings for "{set(binding_map.keys())}" '
-                                              f'but bindings were produced for "{set(ctx.keys())}"')
 
     # Bind the infinitesimals introduced by taking the derivative
     for name_uid, new_var in ctx.items():

@@ -54,7 +54,7 @@ def reverse_deriv_transform(expr: ITeg,
         if (expr.name, expr.uid) not in not_ctx:
             yield ((f'd{expr.name}', expr.uid), out_deriv_vals)
 
-    elif isinstance(expr, Const):
+    elif isinstance(expr, (Const, Delta)):
         pass
 
     elif isinstance(expr, Var):
@@ -161,7 +161,7 @@ def reverse_deriv_transform(expr: ITeg,
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported derivative.')
 
 
-def reverse_deriv(expr: ITeg, out_deriv_vals: Tup, output_list: Optional[List[Var]] = []) -> ITeg:
+def reverse_deriv(expr: ITeg, out_deriv_vals: Tup = None, output_list: Optional[List[Var]] = []) -> ITeg:
     """Computes the derivative of a given expression.
 
     Args:
@@ -177,6 +177,9 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup, output_list: Optional[List[Va
             expr = remap(expr)
         return expr
     """
+
+    if out_deriv_vals is None:
+        out_deriv_vals = Tup(Const(1))
 
     def derivs_for_single_outval(expr: ITeg,
                                  single_outval: Const,
@@ -210,8 +213,8 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup, output_list: Optional[List[Va
 
         assert len(new_vals) > 0, 'There must be variables to compute derivatives. '
         out_expr = Tup(*new_vars) if len(new_vars) > 1 else new_vars[0]
-        derivs = LetIn(Tup(*new_vars), Tup(*new_vals), out_expr)
-        return new_vars, derivs
+        # derivs = LetIn(Tup(*new_vars), Tup(*new_vals), out_expr)
+        return new_vars, (Tup(*new_vals) if len(new_vars) > 1 else new_vals[0])
 
     if len(out_deriv_vals) == 1:
         single_outval = out_deriv_vals.children[0]

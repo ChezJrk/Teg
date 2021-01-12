@@ -29,8 +29,8 @@ class Numpy_EvalMode(EvalMode):
             "num_samples": num_samples
         }
 
-    def eval(self, **kwargs):
-        for var, value in kwargs.items():
+    def eval(self, bindings={}, **kwargs):
+        for var, value in bindings.items():
             self.expr.bind_variable(var, value)
 
         return evaluate(self.expr, ignore_cache=True, **self.options)

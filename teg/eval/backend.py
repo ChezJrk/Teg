@@ -25,5 +25,4 @@ def evaluate(expr: ITeg, bindings={}, backend=None, **kwargs):
         expr.mode_cache[backend] = mode
         expr.mode_options = kwargs
 
-    bindings = {f'{k.name}_{k.uid}': v for k, v in bindings.items()}
-    return expr.mode_cache[backend].eval(**bindings)
+    return expr.mode_cache[backend].eval(bindings=bindings)
