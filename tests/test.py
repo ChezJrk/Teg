@@ -32,8 +32,9 @@ from teg.derivs.reverse_deriv import reverse_deriv
 from teg.passes.simplify import simplify
 from teg.passes.reduce import reduce_to_base
 from teg.passes.delta import split_expr, split_exprs, split_instance
-
 from teg.eval import evaluate
+
+from teg.maps.polar import polar_2d_map
 
 """
 def evaluate_c(expr: ITeg, num_samples=5000, ignore_cache=False, silent=True):
@@ -72,18 +73,18 @@ def evaluate(*args, **kwargs):
 
 
 # TODO: move to test utils later.
-def finite_difference(expr, var, delta=0.004, num_samples=10000, silent=True):
+def finite_difference(expr, var, delta=0.004, num_samples=10000, silent=True, **kwargs):
     assert var.value is not None, 'Provide a binding for var in order to compute it'
 
     base = var.value
     # Compute upper and lower values.
     expr.bind_variable(var, base + delta)
-    plus_delta = evaluate(expr, num_samples=num_samples, backend='C')
+    plus_delta = evaluate(expr, num_samples=num_samples, backend='C', **kwargs)
     if not silent:
         print('Value at base + delta', plus_delta)
 
     expr.bind_variable(var, base - delta)
-    minus_delta = evaluate(expr, num_samples=num_samples, backend='C')
+    minus_delta = evaluate(expr, num_samples=num_samples, backend='C', **kwargs)
     if not silent:
         print('Value at base - delta', minus_delta)
 
@@ -1477,6 +1478,125 @@ class SecondDerivativeTests(TestCase):
         self.assertAlmostEqual(evaluate(dt2, bindings={t: 0.25}, num_samples=1000), 2, places=2)
         self.assertAlmostEqual(evaluate(dt2, bindings={t: 1.5}, num_samples=1000), 0, places=2)
         self.assertAlmostEqual(evaluate(dt2, bindings={t: -1}, num_samples=1000), 0, places=2)
+
+
+class PolarMapTests(TestCase):
+
+    def setUp(self):
+        self.zero, self.one = Const(0), Const(1)
+
+    def test_polar_map_simple(self):
+        x = TegVar('x')
+        y = TegVar('y')
+        r = TegVar('r')
+
+        # Constant square
+        integral = Teg(self.zero, self.one * 2,
+                       Teg(self.zero, self.one * 2,
+                           polar_2d_map(Const(1), x=x, y=y, r=r), x
+                           ), y
+                       )
+
+        self.assertAlmostEqual(evaluate(reduce_to_base(integral), num_samples=1000), 4.0, places=2)
+
+        # Area of a unit circle.
+        integral = Teg(-self.one, self.one,
+                       Teg(-self.one, self.one,
+                           polar_2d_map(IfElse(r < 1, self.one, self.zero), x=x, y=y, r=r), x
+                           ), y
+                       )
+
+        self.assertAlmostEqual(evaluate(reduce_to_base(integral), num_samples=1000), np.pi, places=2)
+
+    def test_polar_map_delta(self):
+        x = TegVar('x')
+        y = TegVar('y')
+        r = TegVar('r')
+
+        radius_value = 0.5
+        radius = Var('radius', radius_value)
+        # Delta along circumference of circle.
+        x_low, x_high = Var('x_lb', -1), Var('x_ub', 1)
+        y_low, y_high = Var('y_lb', -1), Var('y_ub', 1)
+
+        area_integral = Teg(y_low, y_high,
+                            Teg(x_low, x_high,
+                                polar_2d_map(IfElse(r < radius, self.one, self.zero), x=x, y=y, r=r), x
+                                ), y
+                            )
+
+        _, rev_dintegral = reverse_deriv(area_integral, output_list=[radius])
+        # print(area_integral)
+        fwd_dintegral = fwd_deriv(area_integral, [(radius, 1)])
+        area_integral = simplify(reduce_to_base(area_integral))
+
+        # print(fwd_dintegral)
+        # integral = Teg(y_low, y_high,
+        #               Teg(x_low, x_high,
+        #                   polar_2d_map(Delta(r - radius), x=x, y=y, r=r), x
+        #                   ), y
+        #               )
+
+        # print(area_integral)
+        rev_dintegral = simplify(reduce_to_base(rev_dintegral))
+        fwd_dintegral = simplify(reduce_to_base(fwd_dintegral))
+
+        # Full circumference.
+        self.assertAlmostEqual(evaluate(rev_dintegral,
+                                        {x_low: -1, x_high: 1,
+                                         y_low: -1, y_high: 1},
+                                        num_samples=1000,
+                                        ), 2 * np.pi * radius_value, places=2)
+        self.assertAlmostEqual(evaluate(fwd_dintegral,
+                                        {x_low: -1, x_high: 1,
+                                         y_low: -1, y_high: 1},
+                                        num_samples=1000,
+                                        ), 2 * np.pi * radius_value, places=2)
+
+        # Semi-circle
+        self.assertAlmostEqual(evaluate(rev_dintegral,
+                                        {x_low: 0, x_high: 1,
+                                         y_low: -1, y_high: 1},
+                                        num_samples=1000,
+                                        ), np.pi * radius_value, places=2)
+        self.assertAlmostEqual(evaluate(fwd_dintegral,
+                                        {x_low: 0, x_high: 1,
+                                         y_low: -1, y_high: 1},
+                                        num_samples=1000,
+                                        ), np.pi * radius_value, places=2)
+
+        # Quarter circle
+        self.assertAlmostEqual(evaluate(rev_dintegral,
+                                        {x_low: 0, x_high: 1,
+                                         y_low: -1, y_high: 0},
+                                        num_samples=1000,
+                                        ), 0.5 * np.pi * radius_value, places=2)
+        self.assertAlmostEqual(evaluate(fwd_dintegral,
+                                        {x_low: 0, x_high: 1,
+                                         y_low: -1, y_high: 0},
+                                        num_samples=1000,
+                                        ), 0.5 * np.pi * radius_value, places=2)
+
+        # Mini-pixel on corner
+        y_ub = -0.2
+        y_lb = -0.7
+        x_ub = radius_value + 0.2
+        x_lb = radius_value - 0.2
+
+        d_area = finite_difference(area_integral, var=radius, delta=0.002, num_samples=10000, 
+                                   bindings={x_low: x_lb, x_high: x_ub,
+                                             y_low: y_lb, y_high: y_ub})
+        # print(d_area)
+        self.assertAlmostEqual(evaluate(rev_dintegral,
+                                        {x_low: x_lb, x_high: x_ub,
+                                         y_low: y_lb, y_high: y_ub},
+                                        num_samples=1000,
+                                        ), d_area, places=2)
+        self.assertAlmostEqual(evaluate(fwd_dintegral,
+                                        {x_low: x_lb, x_high: x_ub,
+                                         y_low: y_lb, y_high: y_ub},
+                                        num_samples=1000,
+                                        ), d_area, places=2)
 
 
 if __name__ == '__main__':

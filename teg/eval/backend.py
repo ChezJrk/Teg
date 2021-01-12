@@ -1,10 +1,11 @@
 from teg import ITeg
 
-from .c_eval import C_EvalMode
+from .c_eval import C_EvalMode, C_EvalMode_PyBind
 from .numpy_eval import Numpy_EvalMode
 
 BACKENDS = {
     'C': (C_EvalMode, {}),
+    'C_PyBind': (C_EvalMode_PyBind, {}),
     'numpy': (Numpy_EvalMode, {})
 }
 

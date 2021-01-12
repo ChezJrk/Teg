@@ -65,12 +65,6 @@ def fwd_deriv_transform(expr: ITeg,
     # elif isinstance(expr, (TegRemap,)):
     #    assert False, "Cannot take derivative of transient elements."
 
-    elif isinstance(expr, BiMap):
-        # No derivative requirement.
-        # BiMaps are only for TegVars and they shouldn't have derivatives.
-        # TODO: Figure this out.
-        pass
-
     elif isinstance(expr, Delta):
         # assert False, "Cannot take the derivative of a Delta. Reduce all Deltas first"
         expr = Const(0)
@@ -132,7 +126,9 @@ def fwd_deriv_transform(expr: ITeg,
         not_ctx = not_ctx1 | not_ctx2
 
         deltas = Const(0)
+        # print(not_ctx)
         for boolean in primitive_booleans_in(expr.cond, not_ctx):
+            # print(f'Boolean {boolean}')
             jump = substitute(expr, boolean, true) - substitute(expr, boolean, false)
             delta_expr = boolean.right_expr - boolean.left_expr
 
@@ -188,11 +184,12 @@ def fwd_deriv_transform(expr: ITeg,
         # Compute derivatives of each expression and bind them to the corresponding dvar
         new_vars_with_derivs, new_exprs_with_derivs = list(expr.new_vars), list(expr.new_exprs)
         for v, e in zip(expr.new_vars, expr.new_exprs):
-            # By not passing in the updated contexts, require independence of exprs in the body of the let expression
-            de, ctx, not_ctx, _ = fwd_deriv_transform(e, ctx, not_ctx, teg_list)
-            ctx[(v.name, v.uid)] = Var(f'd{v.name}')
-            new_vars_with_derivs.append(ctx[(v.name, v.uid)])
-            new_exprs_with_derivs.append(de)
+            if v in expr.expr:
+                # By not passing in the updated contexts, require independence of exprs in the body of the let expression
+                de, ctx, not_ctx, _ = fwd_deriv_transform(e, ctx, not_ctx, teg_list)
+                ctx[(v.name, v.uid)] = Var(f'd{v.name}')
+                new_vars_with_derivs.append(ctx[(v.name, v.uid)])
+                new_exprs_with_derivs.append(de)
 
         # We want an expression in terms of f'd{var_in_let_body}'
         # This means that they are erroniously added to ctx, so we
@@ -201,6 +198,38 @@ def fwd_deriv_transform(expr: ITeg,
         [ctx.pop((c.name, c.uid), None) for c in expr.new_vars]
 
         expr = LetIn(Tup(*new_vars_with_derivs), Tup(*new_exprs_with_derivs), dexpr)
+
+    elif isinstance(expr, BiMap):
+
+        # Compute derivatives of each expression and bind them to the corresponding dvar
+        new_vars_with_derivs, new_exprs_with_derivs = [], []
+        for v, e in zip(expr.targets, expr.target_exprs):
+            if v in expr.expr:
+                # By not passing in the updated contexts, require independence of exprs in the body of the let expression
+                de, ctx, not_ctx, _ = fwd_deriv_transform(e, ctx, not_ctx, teg_list)
+                ctx[(v.name, v.uid)] = Var(f'd{v.name}')
+                new_vars_with_derivs.append(ctx[(v.name, v.uid)])
+                new_exprs_with_derivs.append(de)
+
+                not_ctx = not_ctx | {(v.name, v.uid)}
+
+        # We want an expression in terms of f'd{var_in_let_body}'
+        # This means that they are erroniously added to ctx, so we
+        # remove them from ctx!
+        dexpr, ctx, not_ctx, _ = fwd_deriv_transform(expr.expr, ctx, not_ctx, teg_list)
+        [ctx.pop((c.name, c.uid), None) for c in expr.targets]
+
+        expr = LetIn(Tup(*new_vars_with_derivs), Tup(*new_exprs_with_derivs),
+                     BiMap(dexpr,
+                           targets=expr.targets,
+                           target_exprs=expr.target_exprs,
+                           sources=expr.sources,
+                           source_exprs=expr.source_exprs,
+                           inv_jacobian=expr.inv_jacobian,
+                           target_lower_bounds=expr.target_lower_bounds,
+                           target_upper_bounds=expr.target_upper_bounds
+                           )
+                     )
 
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported fwd_derivative.')

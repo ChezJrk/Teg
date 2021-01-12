@@ -279,18 +279,33 @@ def normalize_deltas(expr: Delta):
     def inner_fn(e, ctx):
         if isinstance(e, Teg):
             return e, {'is_expr': expr is e, 'upper_tegvars': ctx['upper_tegvars'] | {e.dvar},
+                       'upper_depvars': ctx['upper_depvars'] - {e.dvar},
                        'lower_tegvars': set()}
         elif isinstance(e, BiMap):
             return e, {'is_expr': expr is e, 'upper_tegvars': ctx['upper_tegvars'] | set(e.sources) | set(e.targets),
+                       'upper_depvars': (ctx['upper_depvars'] - set(e.sources)) - set(e.targets),
+                       'lower_tegvars': set()}
+        elif isinstance(e, LetIn):
+            return e, {'is_expr': expr is e, 'upper_tegvars': ctx['upper_tegvars'],
+                       'upper_depvars': (ctx['upper_depvars'] |
+                                         {nvar for nvar, nexpr in zip(e.new_vars, e.new_exprs)
+                                          if any(tegvar in nexpr for tegvar in
+                                          (ctx['upper_tegvars'] | ctx['upper_depvars']))}),
                        'lower_tegvars': set()}
         else:
             return e, {'is_expr': expr is e, 'upper_tegvars': ctx['upper_tegvars'],
+                       'upper_depvars': ctx['upper_depvars'],
                        'lower_tegvars': set()}
 
     def outer_fn(e, ctx):
         if isinstance(e, Delta):
+            # print(ctx['upper_depvars'])
+            depvars = list(tegvar for tegvar in (ctx['upper_depvars'] - ctx['upper_tegvars']) if tegvar in e)
+            assert not depvars,\
+                   f'Delta expression {e} is not explicitly affine: ({depvars}) '\
+                   f'is/are dependent on one or more of {ctx["upper_tegvars"]} '\
+                   f'through one-way let expressions. Use bijective maps (BiMap) instead'
             if (not any([k in ctx['upper_tegvars'] for k in ctx['lower_tegvars']])) or (not ctx['lower_tegvars']):
-                # TODO: What happens if only some tegvars are covered (hypothetically)?
                 # print(f'Not rewriting delta: {e} {ctx["upper_tegvars"]} {ctx["lower_tegvars"]}')
                 return Const(0), ctx
             else:
@@ -317,9 +332,11 @@ def normalize_deltas(expr: Delta):
 
     def context_combine(contexts, ctx):
         return {'lower_tegvars': reduce(lambda a, b: a | b, [ctx['lower_tegvars'] for ctx in contexts], set()),
-                'upper_tegvars': ctx['upper_tegvars']}
+                'upper_tegvars': ctx['upper_tegvars'],
+                'upper_depvars': ctx['upper_depvars']}
 
-    n_expr, context = base_pass(expr, {'upper_tegvars': set()}, inner_fn, outer_fn, context_combine)
+    n_expr, context = base_pass(expr, {'upper_tegvars': set(), 'upper_depvars': set()},
+                                inner_fn, outer_fn, context_combine)
     return n_expr
 
 

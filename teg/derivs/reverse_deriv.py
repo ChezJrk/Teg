@@ -19,7 +19,7 @@ from teg import (
     true,
     false
 )
-from teg.lang.extended import Delta
+from teg.lang.extended import Delta, BiMap
 
 from teg.passes.substitute import substitute
 # from teg.passes.remap import remap, is_remappable
@@ -87,6 +87,7 @@ def reverse_deriv_transform(expr: ITeg,
         yield from ((name_uid, out_deriv_vals * IfElse(expr.cond, Const(0), deriv_else))
                     for name_uid, deriv_else in derivs_else)
 
+        # print(not_ctx)
         for boolean in primitive_booleans_in(expr.cond, not_ctx):
             # print(f'Processing boolean.. {boolean}')
             jump = substitute(expr, boolean, true) - substitute(expr, boolean, false)
@@ -145,15 +146,66 @@ def reverse_deriv_transform(expr: ITeg,
         # Include derivatives of each expression to the let body
         dnew_vars, body_derivs = set(), {}
         for var, e in zip(expr.new_vars, expr.new_exprs):
+            # print(not_ctx)
+            # print(var, e)
+            if any(Var(name=ctx_name, uid=ctx_uid) in e for ctx_name, ctx_uid in not_ctx):
+                # Add dependent variables.
+                assert isinstance(var, TegVar), f'{var} is dependent on TegVar(s):'\
+                                                f'({[ctx_var for ctx_var in not_ctx if ctx_var in e]}).'\
+                                                f'{var} must also be declared as a TegVar and not a Var'
+                # print(not_ctx)
+                not_ctx = not_ctx | {(var.name, var.uid)}
+
+            # print(var)
+            if var not in expr.expr:
+                # print('Not in expression')
+                continue
+            # print('In expression')
             dname = f'd{var.name}'
-            dnew_vars.add(dname)
-            body_derivs[dname] = list(reverse_deriv_transform(e, Const(1), not_ctx, teg_list))
+            dnew_vars.add((dname, var.uid))
+            body_derivs[(dname, var.uid)] = list(reverse_deriv_transform(e, Const(1), not_ctx, teg_list))
 
         # Thread through derivatives of each subexpression
         for (name, uid), dname_expr in reverse_deriv_transform(expr.expr, out_deriv_vals, not_ctx, teg_list):
             dvar_with_ctx = LetIn(expr.new_vars, expr.new_exprs, dname_expr)
-            if name in dnew_vars:
-                yield from ((n, d * dvar_with_ctx) for n, d in body_derivs[name])
+            if (name, uid) in dnew_vars:
+                yield from ((n, d * dvar_with_ctx) for n, d in body_derivs[(name, uid)])
+            else:
+                yield ((name, uid), dvar_with_ctx)
+
+    elif isinstance(expr, BiMap):
+        # Include derivatives of each expression to the let body
+        dnew_vars, body_derivs = set(), {}
+        for var, e in zip(expr.targets, expr.target_exprs):
+            # print(not_ctx)
+            # print(var, e)
+            if any(Var(name=ctx_name, uid=ctx_uid) in e for ctx_name, ctx_uid in not_ctx):
+                # Add dependent variables.
+                assert isinstance(var, TegVar), f'{var} is dependent on TegVar(s):'\
+                                                f'({[ctx_var for ctx_var in not_ctx if ctx_var in e]}).'\
+                                                f'{var} must also be declared as a TegVar and not a Var'
+                # print(not_ctx)
+                not_ctx = not_ctx | {(var.name, var.uid)}
+
+            # print(var)
+            if var not in expr.expr:
+                # print('Not in expression')
+                continue
+            # print('In expression')
+            dname = f'd{var.name}'
+            dnew_vars.add((dname, var.uid))
+            body_derivs[(dname, var.uid)] = list(reverse_deriv_transform(e, Const(1), not_ctx, teg_list))
+
+        # Thread through derivatives of each subexpression
+        for (name, uid), dname_expr in reverse_deriv_transform(expr.expr, out_deriv_vals, not_ctx, teg_list):
+            dvar_with_ctx = BiMap(dname_expr,
+                                  expr.targets, expr.target_exprs,
+                                  expr.sources, expr.source_exprs,
+                                  inv_jacobian=expr.inv_jacobian,
+                                  target_lower_bounds=expr.target_lower_bounds,
+                                  target_upper_bounds=expr.target_upper_bounds)
+            if (name, uid) in dnew_vars:
+                yield from ((n, d * dvar_with_ctx) for n, d in body_derivs[(name, uid)])
             else:
                 yield ((name, uid), dvar_with_ctx)
 
@@ -212,7 +264,7 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup = None, output_list: Optional[
         # print('Reverse-mode list order: ', ''.join([str(var) + ', ' for var in new_vars]))
 
         assert len(new_vals) > 0, 'There must be variables to compute derivatives. '
-        out_expr = Tup(*new_vars) if len(new_vars) > 1 else new_vars[0]
+        # out_expr = Tup(*new_vars) if len(new_vars) > 1 else new_vars[0]
         # derivs = LetIn(Tup(*new_vars), Tup(*new_vals), out_expr)
         return new_vars, (Tup(*new_vals) if len(new_vars) > 1 else new_vals[0])
 
