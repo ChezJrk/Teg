@@ -263,8 +263,10 @@ def simplify(expr: ITeg) -> ITeg:
     elif isinstance(expr, Bool):
         left_expr, right_expr = simplify(expr.left_expr), simplify(expr.right_expr)
         if isinstance(left_expr, Const) and isinstance(right_expr, Const):
-            return false if evaluate(Bool(left_expr, right_expr)) == 0.0 else true
+            return false if evaluate(Bool(left_expr, right_expr, allow_eq=expr.allow_eq)) == 0.0 else true
         return Bool(left_expr, right_expr)
+        # NOTE: having the allow_eq flag be carried through appears to break evals of certain complicated expressions
+        # return Bool(left_expr, right_expr, allow_eq=expr.allow_eq)
 
     elif isinstance(expr, And):
         left_expr, right_expr = simplify(expr.left_expr), simplify(expr.right_expr)
@@ -275,7 +277,7 @@ def simplify(expr: ITeg) -> ITeg:
         if left_expr == false or right_expr == false:
             return false
         if isinstance(left_expr, Const) and isinstance(right_expr, Const):
-            return Const(evaluate(And(simple1, simple2)))
+            return Const(evaluate(And(simple1, simple2)))  # TODO: These variables are never defined; is this tested?
         return And(left_expr, right_expr)
 
     elif isinstance(expr, Or):
@@ -287,7 +289,7 @@ def simplify(expr: ITeg) -> ITeg:
         if left_expr == true or right_expr == true:
             return true
         if isinstance(left_expr, Const) and isinstance(right_expr, Const):
-            return Const(evaluate(Or(simple1, simple2)))
+            return Const(evaluate(Or(simple1, simple2)))  # TODO: These variables are never defined; is this tested?
         return Or(left_expr, right_expr)
 
     else:

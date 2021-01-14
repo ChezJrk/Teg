@@ -6,6 +6,7 @@ from teg.ir.instr import (
     IR_Binary,
     IR_IfElse,
     IR_CompareLT,
+    IR_CompareLTE,
     IR_CompareGT,
     IR_Variable,
     IR_Literal,
@@ -171,6 +172,20 @@ class TypingPass_CompareGT:
 
 @overloads(IR_CompareLT)
 class TypingPass_CompareLT:
+    def __tegpass_typing__(self):
+        left_symbol, right_symbol = self.inputs
+        left_type = left_symbol.irtype()
+        right_type = right_symbol.irtype()
+
+        assert left_type.ctype == right_type.ctype, 'Binary operands have incompatible types'
+        assert ((left_type.size == right_type.size) or
+                (left_type.size == 1) or (right_type.size == 1)), 'Binary operands have incompatible sizes'
+
+        self.output.set_irtype(IR_Type(ctype=Types.BOOL, size=left_type.size))
+
+
+@overloads(IR_CompareLTE)
+class TypingPass_CompareLTE:
     def __tegpass_typing__(self):
         left_symbol, right_symbol = self.inputs
         left_type = left_symbol.irtype()
