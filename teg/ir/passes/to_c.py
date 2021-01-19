@@ -404,7 +404,8 @@ class CPass_Integrate:
         if 'integration_mode' not in dir(self) or self.integration_mode is None:
             self.integration_mode = 'rectangular_quadrature'
 
-        integrator_fn_name = generate_unique_name(name_ctx, label='integrator')
+        integrator_fn_name = generate_unique_name(name_ctx,
+                                                  label=f'{kwargs.get("fn_name_prefix", "")}integrator')
 
         integrator_template_file = _INTEGRATOR_MAP[self.integration_mode]
         _template = open(__data_path__ + '/templates/' + integrator_template_file, 'r')
@@ -612,7 +613,8 @@ class CPass_Function:
 
     def __c_symbolstring__(self, name_ctx, **kwargs):
         if 'func_name' not in dir(self):
-            self.func_name = generate_unique_name(name_ctx, label=self.label)
+            prefix = kwargs.get('fn_name_prefix', '')
+            self.func_name = generate_unique_name(name_ctx, label=f'{prefix}{self.label}')
 
         return self.func_name
 

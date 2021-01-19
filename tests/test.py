@@ -76,7 +76,9 @@ def evaluate(*args, **kwargs):
 def finite_difference(expr, var, delta=0.004, num_samples=10000, silent=True, **kwargs):
     assert var.value is not None, 'Provide a binding for var in order to compute it'
 
-    base = var.value
+    base = kwargs.get('bindings', {}).get(var, var.value)
+    kwargs.get('bindings', {}).pop(var, None)
+
     # Compute upper and lower values.
     expr.bind_variable(var, base + delta)
     plus_delta = evaluate(expr, num_samples=num_samples, backend='C', **kwargs)

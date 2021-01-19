@@ -89,7 +89,7 @@ def polar_2d_map(expr, x, y, r):
                       sources=[x, y],
                       source_exprs=[r * Sin(theta), r * Cos(theta)],
                       targets=[r, theta],
-                      target_exprs=[Sqrt(Sqr(x) + Sqr(y)), ATan2(Tup(x, y))],  # inverses
+                      target_exprs=[Sqrt(Sqr(x) + Sqr(y)), ATan2(Tup(x, y))],
                       inv_jacobian=r,
                       target_lower_bounds=[
                           teg_max(distance_to_origin - box_radius, 0),
@@ -104,7 +104,7 @@ def polar_2d_map(expr, x, y, r):
                       sources=[x, y],
                       source_exprs=[r * Sin(theta), r * Cos(theta)],
                       targets=[r, theta],
-                      target_exprs=[Sqrt(Sqr(x) + Sqr(y)), ATan2(Tup(x, y))],  # inverses
+                      target_exprs=[Sqrt(Sqr(x) + Sqr(y)), ATan2(Tup(x, y))],
                       inv_jacobian=r,
                       target_lower_bounds=[
                         teg_max(distance_to_origin - box_radius, 0),

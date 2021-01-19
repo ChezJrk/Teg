@@ -44,6 +44,19 @@ def cache(f):
     return wrapper_f
 
 
+def merge(a, b, multiplier):
+    parts = a + b
+    parts_dict = {}
+    for i in parts:
+        parts_dict.setdefault(i[0], []).append(i[1])
+
+    all_list = []
+    for (uid, exprs) in parts_dict.items():
+        all_list.append((uid, multiplier * sum(exprs)))
+
+    yield from all_list
+
+
 @cache
 def reverse_deriv_transform(expr: ITeg,
                             out_deriv_vals: Tuple,
@@ -63,13 +76,19 @@ def reverse_deriv_transform(expr: ITeg,
 
     elif isinstance(expr, Add):
         left, right = expr.children
-        yield from reverse_deriv_transform(left, out_deriv_vals, not_ctx, teg_list)
-        yield from reverse_deriv_transform(right, out_deriv_vals, not_ctx, teg_list)
+        #yield from reverse_deriv_transform(left, out_deriv_vals, not_ctx, teg_list)
+        #yield from reverse_deriv_transform(right, out_deriv_vals, not_ctx, teg_list)
+        left_list = list(reverse_deriv_transform(left, Const(1), not_ctx, teg_list))
+        right_list = list(reverse_deriv_transform(right, Const(1), not_ctx, teg_list))
+        yield from merge(left_list, right_list, out_deriv_vals)
 
     elif isinstance(expr, Mul):
         left, right = expr.children
-        yield from reverse_deriv_transform(left, out_deriv_vals * right, not_ctx, teg_list)
-        yield from reverse_deriv_transform(right, out_deriv_vals * left, not_ctx, teg_list)
+        #yield from reverse_deriv_transform(left, out_deriv_vals * right, not_ctx, teg_list)
+        #yield from reverse_deriv_transform(right, out_deriv_vals * left, not_ctx, teg_list)
+        left_list = list(reverse_deriv_transform(left, right, not_ctx, teg_list))
+        right_list = list(reverse_deriv_transform(right, left, not_ctx, teg_list))
+        yield from merge(left_list, right_list, out_deriv_vals)
 
     elif isinstance(expr, Invert):
         child = expr.child
@@ -213,7 +232,7 @@ def reverse_deriv_transform(expr: ITeg,
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported derivative.')
 
 
-def reverse_deriv(expr: ITeg, out_deriv_vals: Tup = None, output_list: Optional[List[Var]] = []) -> ITeg:
+def reverse_deriv(expr: ITeg, out_deriv_vals: Tup = None, output_list: Optional[List[Var]] = None) -> ITeg:
     """Computes the derivative of a given expression.
 
     Args:

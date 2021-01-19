@@ -82,17 +82,24 @@ elif options.compile:
     # Force input order.
     labelled_inputs = {symbol.label: symbol for symbol in ir_func.inputs}
     ordered_inputs = [labelled_inputs[f'{var.name}_{var.uid}'] for var in arglist]
-    ir_func.inputs = ordered_inputs + list(ir_func.inputs - set(ordered_inputs))
+    ir_func.inputs = ordered_inputs + list(set(ir_func.inputs) - set(ordered_inputs))
 
     if options.target == 'C':
-        funclist, arglist = to_c(ir_func, float_width=float_type, num_samples=options.samples)
+        funclist, arglist = to_c(ir_func,
+                                 float_width=float_type,
+                                 num_samples=options.samples,
+                                 fn_name_prefix=options.method)
         header = '#include "teg_c_runtime.h"'
         code = header + '\n'
         for func_name, func_body in funclist:
             code += func_body + '\n'
 
     elif options.target == 'CUDA_C':
-        funclist, arglist = to_c(ir_func, device_code=True, float_width=float_type, num_samples=options.samples)
+        funclist, arglist = to_c(ir_func,
+                                 device_code=True,
+                                 float_width=float_type,
+                                 num_samples=options.samples,
+                                 fn_name_prefix=options.method)
         header = '#include "teg_cuda_runtime.h"'
         code = header + '\n'
         for func_name, func_body in funclist:
