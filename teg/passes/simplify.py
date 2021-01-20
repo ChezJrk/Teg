@@ -26,8 +26,7 @@ from teg.lang.extended import (
     BiMap
 )
 
-from teg.derivs import FwdDeriv, RevDeriv
-
+# from teg.derivs import FwdDeriv, RevDeriv
 
 from teg.eval import evaluate as evaluate_base
 from teg.passes.substitute import substitute
@@ -238,11 +237,11 @@ def simplify(expr: ITeg) -> ITeg:
             return child_expr
 
     elif isinstance(expr, BiMap):
-        simplified_target_exprs = (simplify(e) for e in expr.target_exprs)
-        simplified_source_exprs = (simplify(e) for e in expr.source_exprs)
+        simplified_target_exprs = list(simplify(e) for e in expr.target_exprs)
+        simplified_source_exprs = list(simplify(e) for e in expr.source_exprs)
 
-        simplified_ubs = (simplify(e) for e in expr.target_upper_bounds)
-        simplified_lbs = (simplify(e) for e in expr.target_lower_bounds)
+        simplified_ubs = list(simplify(e) for e in expr.target_upper_bounds)
+        simplified_lbs = list(simplify(e) for e in expr.target_lower_bounds)
 
         child_expr = simplify(expr.expr)
 
@@ -257,8 +256,10 @@ def simplify(expr: ITeg) -> ITeg:
     elif isinstance(expr, Delta):
         return Delta(simplify(expr.expr))
 
-    elif isinstance(expr, (FwdDeriv, RevDeriv)):
-        return simplify(expr.deriv_expr)
+    # elif isinstance(expr, (FwdDeriv, RevDeriv)):
+    #     return simplify(expr.deriv_expr)
+    elif {'FwdDeriv', 'RevDeriv'} & {t.__name__ for t in type(expr).__mro__}:
+        return simplify(expr.__getattribute__('deriv_expr'))
 
     elif isinstance(expr, Bool):
         left_expr, right_expr = simplify(expr.left_expr), simplify(expr.right_expr)

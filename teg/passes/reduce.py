@@ -17,6 +17,8 @@ from .delta import (
     eliminate_deltas
 )
 
+from .simplify import simplify
+
 
 def reduce_to_base(expr: ITeg):
     if is_base_language(expr):
@@ -26,12 +28,12 @@ def reduce_to_base(expr: ITeg):
     expr = tree_copy(expr)
 
     # normalize all deltas.
-    expr = normalize_deltas(expr)
+    expr = simplify(normalize_deltas(expr))
 
     # eliminate all bimaps.
-    expr = eliminate_bimaps(expr)
+    expr = simplify(eliminate_bimaps(expr))
 
     # eliminate all deltas.
-    expr = eliminate_deltas(expr)
+    expr = simplify(eliminate_deltas(expr))
 
     return expr

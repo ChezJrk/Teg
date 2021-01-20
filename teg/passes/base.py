@@ -126,6 +126,7 @@ def do_pass(expr: ITeg, context, inner_fn, outer_fn, context_combine) -> Tuple[I
 
     elif isinstance(expr, BiMap):
         body_expr, body_context = do_pass(*inner_fn(expr.expr, context), inner_fn, outer_fn, context_combine)
+
         source_exprs, source_contexts = zip(*[do_pass(*inner_fn(child, context), inner_fn, outer_fn, context_combine)
                                               for child in expr.source_exprs])
         target_exprs, target_contexts = zip(*[do_pass(*inner_fn(child, context), inner_fn, outer_fn, context_combine)
@@ -149,13 +150,13 @@ def do_pass(expr: ITeg, context, inner_fn, outer_fn, context_combine) -> Tuple[I
                              zip(target_lower_bounds, expr.target_lower_bounds)]) and
                         body_expr is expr.expr and
                         jacobian_expr is expr.inv_jacobian) else BiMap(body_expr,
-                                                                   expr.targets,
-                                                                   target_exprs,
-                                                                   expr.sources,
-                                                                   source_exprs,
-                                                                   jacobian_expr,
-                                                                   target_upper_bounds,
-                                                                   target_lower_bounds)
+                                                                        expr.targets,
+                                                                        target_exprs,
+                                                                        expr.sources,
+                                                                        source_exprs,
+                                                                        jacobian_expr,
+                                                                        target_upper_bounds,
+                                                                        target_lower_bounds)
 
         return outer_fn(expr, context_combine([*source_contexts, *target_contexts,
                                                jacobian_context,

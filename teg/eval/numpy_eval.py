@@ -17,7 +17,8 @@ from teg import (
     SmoothFunc
 )
 
-from teg.derivs import FwdDeriv, RevDeriv
+# from teg.derivs import FwdDeriv, RevDeriv
+
 from .eval_mode import EvalMode
 
 
@@ -94,8 +95,10 @@ def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
             expr.expr.bind_variable(var, var_val)
         expr.value = evaluate(expr.expr, num_samples, ignore_cache)
 
-    elif isinstance(expr, (FwdDeriv, RevDeriv)):
-        expr.value = evaluate(expr.deriv_expr, num_samples, ignore_cache)
+    # elif isinstance(expr, (FwdDeriv, RevDeriv)):
+    #    expr.value = evaluate(expr.deriv_expr, num_samples, ignore_cache)
+    elif {'FwdDeriv', 'RevDeriv'} & {t.__name__ for t in type(expr).__mro__}:
+        expr.value = evaluate(expr.__getattribute__('deriv_expr'), num_samples, ignore_cache)
 
     elif isinstance(expr, Bool):
         left_val = evaluate(expr.left_expr, num_samples, ignore_cache)

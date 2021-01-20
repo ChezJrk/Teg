@@ -16,7 +16,7 @@ from teg import (
     Or,
     Invert,
 )
-from teg.derivs import FwdDeriv, RevDeriv
+# from teg.derivs import FwdDeriv, RevDeriv
 
 from teg.ir.instr import (
     IR_Instruction,
@@ -197,8 +197,10 @@ def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], 
                 {**expr_free_symbols,
                  **{label: symbol for label, symbol in body_symbols.items() if label not in new_symbols.keys()}})
 
-    elif isinstance(expr, (FwdDeriv, RevDeriv)):
-        return _to_ir(expr.deriv_expr, symbols)
+    # elif isinstance(expr, (FwdDeriv, RevDeriv)):
+    #     return _to_ir(expr.deriv_expr, symbols)
+    elif {'FwdDeriv', 'RevDeriv'} & {t.__name__ for t in type(expr).__mro__}:
+        return _to_ir(expr.__getattribute__('deriv_expr'), symbols)
 
     elif isinstance(expr, (Add, Mul)):
         assert len(expr.children) == 2, f'Binary expression "{expr.name}" has an invalid number of operands'

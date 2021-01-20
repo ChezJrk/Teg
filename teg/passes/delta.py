@@ -362,8 +362,13 @@ def reparameterize(bimap: BiMap, expr: ITeg):
 
     def outer_fn(e, ctx):
         if isinstance(e, BiMap) and (bimap is e):
-            assert all([k in ctx['upper_tegvars'] for k in e.sources]),\
-                   f'Attempting to map non-Teg vars {ctx["upper_tegvars"]}'
+            # TODO: Temporary fix.
+            # assert all([k in ctx['upper_tegvars'] for k in e.sources]),\
+            #       f'Attempting to map non-Teg vars {e.sources}, {ctx["upper_tegvars"]}'
+            if not all([k in ctx['upper_tegvars'] for k in e.sources]):
+                # BiMap is invalid, null everything.
+                return Const(0), ctx
+
             bounds_checks = reduce(operator.and_,
                                    [(lb < dvar) & (ub > dvar) for (dvar, (lb, ub)) in ctx['source_bounds'].items()])
             reparamaterized_expr = IfElse(bounds_checks, e.expr * e.inv_jacobian, Const(0))
