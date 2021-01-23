@@ -137,6 +137,8 @@ class C_EvalMode(EvalMode):
         args = [bindings[arg] if arg in bindings.keys() else teg_var.value for arg, default, teg_var in self.arglist]
 
         assert os.path.exists(self.module_filename), f'Could not find binary {self.module_filename}'
+        assert all([arg is not None for arg in args]),\
+               f'No bindings found for {[self.arglist[i][2] for i, arg in enumerate(args) if arg is None]}'
 
         run_command = f"{self.module_filename} {' '.join([format(arg) for arg in args])}"
         proc = subprocess.Popen(run_command,

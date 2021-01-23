@@ -3,7 +3,8 @@ from teg.math import (
     Sqrt,
     Sin,
     Cos,
-    ATan2
+    ATan2,
+    ASin
 )
 
 from .utils import overloads
@@ -53,6 +54,12 @@ class CPass_Sin(SimpleCMath):
 class CPass_Cos(SimpleCMath):
     def to_c(input_symbol, output_symbol, **kwargs):
         return SimpleCMath.simple_c(input_symbol, output_symbol, lambda x: f'cos({x})', **kwargs)
+
+
+@overloads(ASin)
+class CPass_ASin(SimpleCMath):
+    def to_c(input_symbol, output_symbol, **kwargs):
+        return SimpleCMath.simple_c(input_symbol, output_symbol, lambda x: f'asin({x})', **kwargs)
 
 
 @overloads(ATan2)

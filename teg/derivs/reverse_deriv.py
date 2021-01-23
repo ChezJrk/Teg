@@ -1,4 +1,4 @@
-from typing import Set, List, Tuple, Iterable, Optional
+from typing import Set, List, Tuple, Iterable, Optional, Dict
 from collections import defaultdict
 from functools import reduce
 import operator
@@ -20,26 +20,25 @@ from teg import (
     false
 )
 from teg.lang.extended import Delta, BiMap
+from teg.lang.extended_utils import extract_vars
 
 from teg.passes.substitute import substitute
-# from teg.passes.remap import remap, is_remappable
 
-# from .edge.rotated import rotated_delta_contribution
-from .edge.common import primitive_booleans_in
+from .edge.common import primitive_booleans_in, extend_dependencies
 
 
 def cache(f):
     cache = {}
 
-    def wrapper_f(expr, out_deriv_vals, not_ctx, teg_list):
+    def wrapper_f(expr, out_deriv_vals, not_ctx, deps):
         # Note: it may be better to just cache on expr and then
-        # have cache[k] = list(f(expr, [1, 1, ... , 1, 1], not_ctx, teg_list))
+        # have cache[k] = list(f(expr, [1, 1, ... , 1, 1], not_ctx, deps))
         # and then out_deriva_vals * cache[k]
         # I believe this is a more effective caching machanism
 
         k = (expr, out_deriv_vals)
         if k not in cache:
-            cache[k] = list(f(expr, out_deriv_vals, not_ctx, teg_list))
+            cache[k] = list(f(expr, out_deriv_vals, not_ctx, deps))
         return cache[k]
     return wrapper_f
 
@@ -61,10 +60,12 @@ def merge(a, b, multiplier):
 def reverse_deriv_transform(expr: ITeg,
                             out_deriv_vals: Tuple,
                             not_ctx: Set[Tuple[str, int]],
-                            teg_list: Set[Tuple[TegVar, ITeg, ITeg]]) -> Iterable[Tuple[Tuple[str, int], ITeg]]:
+                            deps: Dict[TegVar, Set[Var]]) -> Iterable[Tuple[Tuple[str, int], ITeg]]:
 
     if isinstance(expr, TegVar):
-        if (expr.name, expr.uid) not in not_ctx:
+        # print({(v.name, v.uid) for v in extend_dependencies({expr}, deps)})
+        if (((expr.name, expr.uid) not in not_ctx) or
+            {(v.name, v.uid) for v in extend_dependencies({expr}, deps)} - not_ctx):
             yield ((f'd{expr.name}', expr.uid), out_deriv_vals)
 
     elif isinstance(expr, (Const, Delta)):
@@ -76,42 +77,41 @@ def reverse_deriv_transform(expr: ITeg,
 
     elif isinstance(expr, Add):
         left, right = expr.children
-        #yield from reverse_deriv_transform(left, out_deriv_vals, not_ctx, teg_list)
-        #yield from reverse_deriv_transform(right, out_deriv_vals, not_ctx, teg_list)
-        left_list = list(reverse_deriv_transform(left, Const(1), not_ctx, teg_list))
-        right_list = list(reverse_deriv_transform(right, Const(1), not_ctx, teg_list))
+        # yield from reverse_deriv_transform(left, out_deriv_vals, not_ctx, teg_list)
+        # yield from reverse_deriv_transform(right, out_deriv_vals, not_ctx, teg_list)
+        left_list = list(reverse_deriv_transform(left, Const(1), not_ctx, deps))
+        right_list = list(reverse_deriv_transform(right, Const(1), not_ctx, deps))
         yield from merge(left_list, right_list, out_deriv_vals)
 
     elif isinstance(expr, Mul):
         left, right = expr.children
-        #yield from reverse_deriv_transform(left, out_deriv_vals * right, not_ctx, teg_list)
-        #yield from reverse_deriv_transform(right, out_deriv_vals * left, not_ctx, teg_list)
-        left_list = list(reverse_deriv_transform(left, right, not_ctx, teg_list))
-        right_list = list(reverse_deriv_transform(right, left, not_ctx, teg_list))
+        # yield from reverse_deriv_transform(left, out_deriv_vals * right, not_ctx, deps)
+        # yield from reverse_deriv_transform(right, out_deriv_vals * left, not_ctx, deps)
+        left_list = list(reverse_deriv_transform(left, right, not_ctx, deps))
+        right_list = list(reverse_deriv_transform(right, left, not_ctx, deps))
         yield from merge(left_list, right_list, out_deriv_vals)
 
     elif isinstance(expr, Invert):
         child = expr.child
-        yield from reverse_deriv_transform(child, -out_deriv_vals * expr * expr, not_ctx, teg_list)
+        yield from reverse_deriv_transform(child, -out_deriv_vals * expr * expr, not_ctx, deps)
 
     elif isinstance(expr, SmoothFunc):
         child = expr.expr
-        yield from reverse_deriv_transform(child, expr.rev_deriv(out_deriv_expr=out_deriv_vals), not_ctx, teg_list)
+        yield from reverse_deriv_transform(child, expr.rev_deriv(out_deriv_expr=out_deriv_vals), not_ctx, deps)
 
     elif isinstance(expr, IfElse):
-        derivs_if = reverse_deriv_transform(expr.if_body, Const(1), not_ctx, teg_list)
-        derivs_else = reverse_deriv_transform(expr.else_body, Const(1), not_ctx, teg_list)
+        derivs_if = reverse_deriv_transform(expr.if_body, Const(1), not_ctx, deps)
+        derivs_else = reverse_deriv_transform(expr.else_body, Const(1), not_ctx, deps)
         yield from ((name_uid, out_deriv_vals * IfElse(expr.cond, deriv_if, Const(0)))
                     for name_uid, deriv_if in derivs_if)
         yield from ((name_uid, out_deriv_vals * IfElse(expr.cond, Const(0), deriv_else))
                     for name_uid, deriv_else in derivs_else)
 
         # print(not_ctx)
-        for boolean in primitive_booleans_in(expr.cond, not_ctx):
-            # print(f'Processing boolean.. {boolean}')
+        for boolean in primitive_booleans_in(expr.cond, not_ctx, deps):
             jump = substitute(expr, boolean, true) - substitute(expr, boolean, false)
             delta_expr = boolean.right_expr - boolean.left_expr
-            derivs_delta_expr = reverse_deriv_transform(delta_expr, Const(1), not_ctx, teg_list)
+            derivs_delta_expr = reverse_deriv_transform(delta_expr, Const(1), not_ctx, deps)
             yield from ((name_uid, out_deriv_vals * deriv_delta_expr * jump * Delta(delta_expr))
                         for name_uid, deriv_delta_expr in derivs_delta_expr)
 
@@ -119,10 +119,8 @@ def reverse_deriv_transform(expr: ITeg,
         not_ctx.discard((expr.dvar.name, expr.dvar.uid))
 
         # Apply Leibniz rule directly for moving boundaries
-        lower_derivs = reverse_deriv_transform(expr.lower, out_deriv_vals, not_ctx,
-                                               teg_list | {(expr.dvar, expr.lower, expr.upper)})
-        upper_derivs = reverse_deriv_transform(expr.upper, out_deriv_vals, not_ctx,
-                                               teg_list | {(expr.dvar, expr.lower, expr.upper)})
+        lower_derivs = reverse_deriv_transform(expr.lower, out_deriv_vals, not_ctx, deps)
+        upper_derivs = reverse_deriv_transform(expr.upper, out_deriv_vals, not_ctx, deps)
         yield from ((name_uid, upper_deriv * substitute(expr.body, expr.dvar, expr.upper))
                     for name_uid, upper_deriv in upper_derivs)
         yield from ((name_uid, - lower_deriv * substitute(expr.body, expr.dvar, expr.lower))
@@ -131,11 +129,11 @@ def reverse_deriv_transform(expr: ITeg,
         not_ctx.add((expr.dvar.name, expr.dvar.uid))
 
         """
-        delta_set = rotated_delta_contribution(expr, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
+        delta_set = rotated_delta_contribution(expr, not_ctx, deps | {(expr.dvar, expr.lower, expr.upper)})
 
         for delta in delta_set:
             delta_expr, distance_to_delta, remapping = delta
-            deriv_dist_to_delta = reverse_deriv_transform(distance_to_delta, Const(1), not_ctx, teg_list)
+            deriv_dist_to_delta = reverse_deriv_transform(distance_to_delta, Const(1), not_ctx, deps)
             delta_deriv_parts = [(name_uid, deriv_expr) for name_uid, deriv_expr in deriv_dist_to_delta]
 
             delta_deriv_dict = {}
@@ -152,13 +150,13 @@ def reverse_deriv_transform(expr: ITeg,
         deriv_body_traces = reverse_deriv_transform(expr.body,
                                                     Const(1),
                                                     not_ctx,
-                                                    teg_list | {(expr.dvar, expr.lower, expr.upper)})
+                                                    deps)
 
         yield from ((name_uid, out_deriv_vals * Teg(expr.lower, expr.upper, deriv_body, expr.dvar))
                     for name_uid, deriv_body in deriv_body_traces)
 
     elif isinstance(expr, Tup):
-        yield [reverse_deriv_transform(child, out_deriv_vals, not_ctx, teg_list)
+        yield [reverse_deriv_transform(child, out_deriv_vals, not_ctx, deps)
                for child in expr]
 
     elif isinstance(expr, LetIn):
@@ -182,10 +180,10 @@ def reverse_deriv_transform(expr: ITeg,
             # print('In expression')
             dname = f'd{var.name}'
             dnew_vars.add((dname, var.uid))
-            body_derivs[(dname, var.uid)] = list(reverse_deriv_transform(e, Const(1), not_ctx, teg_list))
+            body_derivs[(dname, var.uid)] = list(reverse_deriv_transform(e, Const(1), not_ctx, deps))
 
         # Thread through derivatives of each subexpression
-        for (name, uid), dname_expr in reverse_deriv_transform(expr.expr, out_deriv_vals, not_ctx, teg_list):
+        for (name, uid), dname_expr in reverse_deriv_transform(expr.expr, out_deriv_vals, not_ctx, deps):
             dvar_with_ctx = LetIn(expr.new_vars, expr.new_exprs, dname_expr)
             if (name, uid) in dnew_vars:
                 yield from ((n, d * dvar_with_ctx) for n, d in body_derivs[(name, uid)])
@@ -195,6 +193,7 @@ def reverse_deriv_transform(expr: ITeg,
     elif isinstance(expr, BiMap):
         # Include derivatives of each expression to the let body
         dnew_vars, body_derivs = set(), {}
+        new_deps = {}
         for var, e in zip(expr.targets, expr.target_exprs):
             # print(not_ctx)
             # print(var, e)
@@ -205,18 +204,19 @@ def reverse_deriv_transform(expr: ITeg,
                                                 f'{var} must also be declared as a TegVar and not a Var'
                 # print(not_ctx)
                 not_ctx = not_ctx | {(var.name, var.uid)}
-
             # print(var)
             if var not in expr.expr:
                 # print('Not in expression')
                 continue
+            new_deps[var] = extract_vars(e)
             # print('In expression')
             dname = f'd{var.name}'
             dnew_vars.add((dname, var.uid))
-            body_derivs[(dname, var.uid)] = list(reverse_deriv_transform(e, Const(1), not_ctx, teg_list))
+            body_derivs[(dname, var.uid)] = list(reverse_deriv_transform(e, Const(1), not_ctx, deps))
 
+        deps = {**deps, **new_deps}
         # Thread through derivatives of each subexpression
-        for (name, uid), dname_expr in reverse_deriv_transform(expr.expr, out_deriv_vals, not_ctx, teg_list):
+        for (name, uid), dname_expr in reverse_deriv_transform(expr.expr, out_deriv_vals, not_ctx, deps):
             dvar_with_ctx = BiMap(dname_expr,
                                   expr.targets, expr.target_exprs,
                                   expr.sources, expr.source_exprs,
@@ -260,7 +260,7 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup = None, output_list: Optional[
         partial_deriv_map = defaultdict(lambda: Const(0))
 
         # After deriv_transform, expr will have unbound infinitesimals
-        for name_uid, e in reverse_deriv_transform(expr, single_outval, set(), set()):
+        for name_uid, e in reverse_deriv_transform(expr, single_outval, set(), {}):
             partial_deriv_map[name_uid] += e
 
         # Introduce fresh variables for each partial derivative

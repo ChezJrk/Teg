@@ -19,8 +19,16 @@ from .delta import (
 
 from .simplify import simplify
 
+import time
 
-def reduce_to_base(expr: ITeg):
+from teg import (
+    ITeg, Var, LetIn, Tup, Const
+)
+from teg.passes.base import base_pass
+from teg.passes.substitute import substitute
+
+
+def reduce_to_base(expr: ITeg, timing=False):
     if is_base_language(expr):
         return expr
 
@@ -28,12 +36,24 @@ def reduce_to_base(expr: ITeg):
     expr = tree_copy(expr)
 
     # normalize all deltas.
+    start = time.time()
     expr = simplify(normalize_deltas(expr))
+    end = time.time()
+    if timing:
+        print(f'\tDelta normalization: {end - start:.2f}s')
 
     # eliminate all bimaps.
+    start = time.time()
     expr = simplify(eliminate_bimaps(expr))
+    end = time.time()
+    if timing:
+        print(f'\tBimap elimination: {end - start:.2f}s')
 
     # eliminate all deltas.
+    start = time.time()
     expr = simplify(eliminate_deltas(expr))
+    end = time.time()
+    if timing:
+        print(f'\tDelta elimination: {end - start:.2f}s')
 
     return expr

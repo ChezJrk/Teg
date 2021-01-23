@@ -93,6 +93,26 @@ class Cos(SmoothFunc):
         return input_size
 
 
+class ASin(SmoothFunc):
+    """
+        theta = asin(x)
+    """
+    def __init__(self, expr: ITeg, name: str = "ASin"):
+        super(ASin, self).__init__(expr=expr, name=name)
+
+    def fwd_deriv(self, in_deriv_expr: ITeg):
+        raise NotImplementedError
+
+    def rev_deriv(self, out_deriv_expr: ITeg):
+        raise NotImplementedError
+
+    def operation(self, in_value):
+        return np.arcsin(in_value)
+
+    def output_size(input_size):
+        return input_size
+
+
 class ATan2(SmoothFunc):
     """
         theta = atan2(x, y)

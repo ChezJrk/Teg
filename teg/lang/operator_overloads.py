@@ -101,6 +101,12 @@ class TegOverloads:
     def __contains__(self, item):
         return (item == self) or any([item in child for child in self.children])
 
+    def __hash__(self):
+        if hasattr(self, 'hash_cache'):
+            return self.hash_cache
+        self.hash_cache = hash(tuple(hash(e) for e in self.children))
+        return self.hash_cache
+
 
 @overloads(Var)
 class TegVariableOverloads:
@@ -283,7 +289,7 @@ class SmoothFuncOverloads:
 class TegTupleOverloads:
 
     def __str__(self):
-        return ", ".join([str(e) for e in self.children])
+        return "(" + ", ".join([str(e) for e in self.children]) + ")"
 
     def __repr__(self):
         return f'Tup({[repr(e) for e in self.children]})'

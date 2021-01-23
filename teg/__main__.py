@@ -66,6 +66,9 @@ elif options.compile:
     print(f"Simplifying program {input_file}")
     program = simplify(program)
 
+    # print(f"CSE {input_file}")
+    # program = cse(program)
+
     if '__ARGLIST__' in dir(code_module):
         arglist = code_module.__ARGLIST__
     else:

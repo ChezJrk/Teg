@@ -35,7 +35,7 @@ class RevDeriv(ITeg):
     def __init__(self, expr: ITeg, out_deriv_vals: Tup, output_list: Optional[List[Var]] = None):
         super(RevDeriv, self).__init__(children=[])
         variables, deriv_expr = reverse_deriv(expr, out_deriv_vals, output_list=output_list)
-
+        # print(variables)
         # print(deriv_expr)
         deriv_expr = reduce_to_base(deriv_expr)
 

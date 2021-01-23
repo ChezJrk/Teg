@@ -27,6 +27,7 @@ from teg.lang.extended_utils import (
 )
 
 from teg.derivs.edge.handlers import (
+    bilinear,
     affine,
     single_axis
 )
@@ -38,7 +39,8 @@ from copy import copy
 # TODO: Change that when possible.
 HANDLERS = [
     single_axis.ConstantAxisHandler,
-    affine.AffineHandler
+    affine.AffineHandler,
+    bilinear.BilinearHandler
 ]
 
 
@@ -315,7 +317,7 @@ def normalize_deltas(expr: Delta):
                     assert any(accepts), f'Cannot find any handler for delta expression {e}'
 
                     handler = HANDLERS[accepts.index(True)]
-                    # print(f'Rewriting delta: {e} {ctx["upper_tegvars"]}')
+                    # print(f'Rewriting delta: {e} {ctx["upper_tegvars"]}, with handler {handler.__name__}')
                     e = handler.rewrite(e, set(ctx['upper_tegvars']))
                     # print(f'Rewritten delta: {e}')
                     e = normalize_deltas(e)  # Normalize further if necessary
@@ -367,6 +369,7 @@ def reparameterize(bimap: BiMap, expr: ITeg):
             #       f'Attempting to map non-Teg vars {e.sources}, {ctx["upper_tegvars"]}'
             if not all([k in ctx['upper_tegvars'] for k in e.sources]):
                 # BiMap is invalid, null everything.
+                print(f'WARNING: Attempting to map non-Teg vars {e.sources}, {ctx["upper_tegvars"]}')
                 return Const(0), ctx
 
             bounds_checks = reduce(operator.and_,
@@ -377,7 +380,9 @@ def reparameterize(bimap: BiMap, expr: ITeg):
             # print('\n\n')
             return (reparamaterized_expr,
                     {**ctx,
-                     'teg_replace': {s: t for s, t in zip(e.sources, e.targets)},
+                     # 'teg_replace': {s: t for s, t in zip(e.sources, e.targets)},
+                     'teg_sources': list(e.sources),
+                     'teg_targets': list(e.targets),
                      'let_mappings': {s: sexpr for s, sexpr in zip(e.sources, e.source_exprs)},
                      'target_lower_bounds': {t: tlb for t, tlb in zip(e.targets, e.target_lower_bounds)},
                      'target_upper_bounds': {t: tub for t, tub in zip(e.targets, e.target_upper_bounds)}
@@ -385,8 +390,9 @@ def reparameterize(bimap: BiMap, expr: ITeg):
         elif isinstance(e, Teg):
             # print(ctx)
 
-            if e.dvar in ctx.get('teg_replace', {}):
-                target_dvar = ctx['teg_replace'].pop(e.dvar)
+            if e.dvar in ctx.get('teg_sources', {}):
+                ctx['teg_sources'].remove(e.dvar)
+                target_dvar = ctx['teg_targets'].pop()
                 # print(f'REPLACING TEG {e.dvar}')
                 placeholders = {
                     **{f'{svar.uid}_ub': upper for svar, (lower, upper) in ctx['source_bounds'].items()},
@@ -401,7 +407,7 @@ def reparameterize(bimap: BiMap, expr: ITeg):
                 # Remove old teg.
                 e = e.body
 
-                if len(ctx['teg_replace']) == 0:
+                if len(ctx['teg_sources']) == 0:
                     # Last teg replacement.
 
                     # Add let mappings here.
@@ -427,7 +433,7 @@ def reparameterize(bimap: BiMap, expr: ITeg):
                 print(ctx.get('let_mappings', {}))
             """
 
-            if len(ctx.get('teg_replace', {})) > 0:
+            if len(ctx.get('teg_sources', {})) > 0:
                 # print(f'ENCOUNTERED LET {e.new_vars}')
                 # e contains expr
                 if (any([new_var in map_expr
@@ -447,7 +453,7 @@ def reparameterize(bimap: BiMap, expr: ITeg):
         return e, ctx
 
     def context_combine(contexts, ctx):
-        ctxs = [context for context in contexts if 'teg_replace' in context]
+        ctxs = [context for context in contexts if 'teg_sources' in context]
         assert len(ctxs) <= 1, 'Found the same map in several branches'
         if len(ctxs) == 1:
             return {**ctxs[0], 'upper_tegvars': ctx['upper_tegvars']}
@@ -477,13 +483,17 @@ def eliminate_bimaps(expr: ITeg):
         return eliminate_bimaps(substitute_instance(expr, top_level_bimap, let_expr))
     else:
         linear_expr = split_instance(top_level_bimap, expr)
-        #print(f'\n\n\nBIMAP ELIMINATION (PRE-REMAP) {id(top_level_bimap)}:')
-        #print(linear_expr)
-        e = substitute_instance(expr, top_level_bimap, Const(0)) +\
-            tree_copy(reparameterize(top_level_bimap, linear_expr))
-        #print('\n\n\nPOST-REMAP')
-        #print(e)
-        #print('\n\n')
+        # print(f'\n\n\nBIMAP ELIMINATION (PRE-REMAP) {id(top_level_bimap)} {top_level_bimap.sources}:')
+        # print(expr)
+        old_tree = substitute_instance(expr, top_level_bimap, Const(0))
+        new_tree = tree_copy(reparameterize(top_level_bimap, linear_expr))
+        e = old_tree + new_tree\
+            
+        # print('\n\n\nPOST-REMAP')
+        # print(old_tree)
+        # print('\n\n')
+        # print(new_tree)
+        # print('\n\n')
         return eliminate_bimaps(e)
 
 

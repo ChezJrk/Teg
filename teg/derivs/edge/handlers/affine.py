@@ -37,7 +37,7 @@ class AffineHandler(DeltaHandler):
 
     def accept(delta, not_ctx=set()):
         try:
-            affine_list = extract_coefficients_from_affine(delta.expr, not_ctx)
+            affine_list = extract_coefficients_from_affine(delta.expr, {(var.name, var.uid) for var in not_ctx})
             assert all([is_expr_parametric(coeff, not_ctx) for coeff in affine_list.values()]), 'Coeffs not parametric'
             return True
         except AssertionError:
@@ -139,7 +139,7 @@ def combine_affine_sets(affine_lists: List[Dict[Tuple[str, int], ITeg]], op):
             elif is_sample.count(True) == 1:
                 primitive_variable = combined_variable[is_sample.index(True)]
             else:
-                raise ValueError('Error when processing affine sets, \
+                raise AssertionError('Error when processing affine sets, \
                                   encountered non-affine combination.')
 
             combined_set[primitive_variable] = combined_expr
@@ -153,7 +153,7 @@ def combine_affine_sets(affine_lists: List[Dict[Tuple[str, int], ITeg]], op):
                     combined_set[variable] = expr
 
     else:
-        raise ValueError('Operation not supported')
+        raise AssertionError('Operation not supported')
 
     return combined_set
 

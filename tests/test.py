@@ -23,7 +23,7 @@ from teg.lang.extended import (
 from teg.math import (
     Sqr, Sqrt,
     Cos, Sin,
-    ATan2
+    ATan2, ASin
 )
 
 from teg.derivs import FwdDeriv, RevDeriv
@@ -35,6 +35,8 @@ from teg.passes.delta import split_expr, split_exprs, split_instance
 from teg.eval import evaluate
 
 from teg.maps.polar import polar_2d_map
+from teg.maps.transform import scale, translate
+from teg.maps.smoothstep import smoothstep
 
 """
 def evaluate_c(expr: ITeg, num_samples=5000, ignore_cache=False, silent=True):
@@ -74,10 +76,12 @@ def evaluate(*args, **kwargs):
 
 # TODO: move to test utils later.
 def finite_difference(expr, var, delta=0.004, num_samples=10000, silent=True, **kwargs):
-    assert var.value is not None, 'Provide a binding for var in order to compute it'
 
+    kwargs['bindings'] = dict(kwargs.get('bindings', {}))
     base = kwargs.get('bindings', {}).get(var, var.value)
     kwargs.get('bindings', {}).pop(var, None)
+
+    assert base is not None, f'Provide a binding for {var} in order to compute it'
 
     # Compute upper and lower values.
     expr.bind_variable(var, base + delta)
@@ -1233,6 +1237,15 @@ class MathFunctionsTest(TestCase):
         compare_eval_methods(self, body_atan2, {x: 1, y: 0}, places=2)
         compare_eval_methods(self, body_atan2, {x: -1, y: 0}, places=2)
 
+        body_asin = ASin(x)
+
+        self.assertAlmostEqual(evaluate(body_asin, {x: -1}), -np.pi/2, places=4)
+        self.assertAlmostEqual(evaluate(body_asin, {x: 0}), 0, places=4)
+        self.assertAlmostEqual(evaluate(body_asin, {x: 1}), np.pi/2, places=4)
+        compare_eval_methods(self, body_asin, {x: 1}, places=2)
+        compare_eval_methods(self, body_asin, {x: 0}, places=2)
+        compare_eval_methods(self, body_asin, {x: -1}, places=2)
+
 
 class DeltaTest(TestCase):
 
@@ -1480,6 +1493,415 @@ class SecondDerivativeTests(TestCase):
         self.assertAlmostEqual(evaluate(dt2, bindings={t: 0.25}, num_samples=1000), 2, places=2)
         self.assertAlmostEqual(evaluate(dt2, bindings={t: 1.5}, num_samples=1000), 0, places=2)
         self.assertAlmostEqual(evaluate(dt2, bindings={t: -1}, num_samples=1000), 0, places=2)
+
+
+class TransformationTests(TestCase):
+
+    def setUp(self):
+        self.zero, self.one = Const(0), Const(1)
+
+    def test_translation(self):
+        x = TegVar('x')
+        y = TegVar('y')
+        t1 = Var('t1')
+        t2 = Var('t2')
+
+        translate_map, (x_, y_) = translate([x, y], [t1, t2])
+
+        # Derivative of threshold only.
+        integral = Teg(self.zero, self.one,
+                       Teg(self.zero, self.one,
+                           translate_map(IfElse(x_ + y_ > 1, 1, 0)), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t1, t2])
+        # print(simplify(d_t_expr))
+        fd_d_t1 = 1.0  # finite_difference(reduce_to_base(integral), t1, bindings={t1: 0, t2: 0})
+        fd_d_t2 = 1.0  # finite_difference(reduce_to_base(integral), t2, bindings={t1: 0, t2: 0})
+
+        d_t_expr = reduce_to_base(d_t_expr)
+        # print('d_t_expr')
+        # print(simplify(d_t_expr))
+        check_nested_lists(self,
+                           evaluate(d_t_expr, num_samples=1000, bindings={t1: 0, t2: 0}),
+                           [fd_d_t1, fd_d_t2],
+                           places=3)
+
+    def test_scaling(self):
+        x = TegVar('x')
+        y = TegVar('y')
+        t1 = Var('t1')
+        t2 = Var('t2')
+
+        scale_map, (x_, y_) = scale([x, y], [t1, t2])
+
+        # Derivative of threshold only.
+        integral = Teg(self.zero, self.one,
+                       Teg(self.zero, self.one,
+                           scale_map(IfElse(x_ + y_ > 1, 1, 0)), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t1, t2])
+        # print(simplify(d_t_expr))
+        fd_d_t1 = finite_difference(reduce_to_base(integral), t1, bindings={t1: 1, t2: 1})
+        fd_d_t2 = finite_difference(reduce_to_base(integral), t2, bindings={t1: 1, t2: 1})
+
+        d_t_expr = reduce_to_base(d_t_expr)
+        # print('d_t_expr')
+        # print(simplify(d_t_expr))
+        check_nested_lists(self,
+                           evaluate(d_t_expr, num_samples=1000, bindings={t1: 1, t2: 1}),
+                           [fd_d_t1, fd_d_t2],
+                           places=2)
+
+    def test_composed_transforms(self):
+        x = TegVar('x')
+        y = TegVar('y')
+
+        t1 = Var('t1')
+        t2 = Var('t2')
+
+        t3 = Var('t3')
+        t4 = Var('t4')
+
+        scale_map, (x_s, y_s) = scale([x, y], [t1, t2])
+        translate_map, (x_st, y_st) = translate([x_s, y_s], [t3, t4])
+
+        # Derivative of threshold only.
+        integral = Teg(self.zero, self.one,
+                       Teg(self.zero, self.one,
+                           scale_map(translate_map(IfElse(x_st + y_st > 1, 1, 0))), y
+                           ), x
+                       )
+
+        bindings = {t1: 1, t2: 1, t3: 0, t4: 0}
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t1, t2, t3, t4])
+        # print(simplify(d_t_expr))
+        fd_d_t1 = finite_difference(reduce_to_base(integral), t1, bindings=bindings)
+        fd_d_t2 = finite_difference(reduce_to_base(integral), t2, bindings=bindings)
+        fd_d_t3 = finite_difference(reduce_to_base(integral), t3, bindings=bindings)
+        fd_d_t4 = finite_difference(reduce_to_base(integral), t4, bindings=bindings)
+
+        d_t_expr = reduce_to_base(d_t_expr)
+        # print('d_t_expr')
+        # print(simplify(d_t_expr))
+        print([fd_d_t1, fd_d_t2, fd_d_t3, fd_d_t4])
+        check_nested_lists(self,
+                           evaluate(d_t_expr, num_samples=1000, bindings=bindings),
+                           [fd_d_t1, fd_d_t2, fd_d_t3, fd_d_t4],
+                           places=2)
+
+
+class HyperbolicMapTests(TestCase):
+
+    def setUp(self):
+        self.zero, self.one = Const(0), Const(1)
+        self.near_zero = Const(10e-3)
+        self.near_one = Const(1 - 10e-3)
+
+    def test_hyperbolic_map(self):
+        x = TegVar('x')
+        y = TegVar('y')
+        t = Var('t')
+
+        # Derivative of threshold only.
+        integral = Teg(Const(10e-4), self.one,
+                       Teg(Const(10e-4), self.one,
+                           IfElse(x * y > t, 1, 0), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
+        fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
+        d_t_expr = reduce_to_base(d_t_expr)
+        # print('d_t: ', fd_d_t)
+        self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000, bindings={t: 0.5}), fd_d_t, places=2)
+
+        # Derivative of threshold with scaling
+        integral = Teg(Const(0.3), self.one,
+                       Teg(Const(0.3), self.one,
+                           IfElse(2 * x * y > t, 1, 0), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
+        fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
+        d_t_expr = reduce_to_base(d_t_expr)
+        self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000, bindings={t: 0.5}), fd_d_t, places=2)
+
+    def test_hyperbolic_mirrored(self):
+        x = TegVar('x')
+        y = TegVar('y')
+        t = Var('t')
+
+        # Derivative of threshold with negative scaling
+        integral = Teg(-self.one, Const(0.3),
+                       Teg(Const(0.3), self.one,
+                           IfElse(x * y < -t, 1, 0), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
+        fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
+        d_t_expr = reduce_to_base(d_t_expr)
+        self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000, bindings={t: 0.5}), fd_d_t, places=2)
+
+        # Derivative of threshold with negative scaling
+        integral = Teg(Const(0.3), self.one,
+                       Teg(-self.one, Const(0.3),
+                           IfElse(- x * y > t, 1, 0), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
+        fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
+        d_t_expr = reduce_to_base(d_t_expr)
+        self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000, bindings={t: 0.5}), fd_d_t, places=2)
+
+    def test_transformed_hyperbolic_conditions(self):
+        x, y = TegVar('x'), TegVar('y')
+        t1, t2 = Var('t1'), Var('t2')
+        t3, t4 = Var('t3'), Var('t4')
+        t = Var('t')
+
+        scale_map, (x_s, y_s) = scale([x, y], [t1, t2])
+        translate_map, (x_st, y_st) = translate([x_s, y_s], [t3, t4])
+
+        bindings = {t: 0.25, t1: 0.9, t2: 0.9, t3: 0.1, t4: 0.1}
+        # Derivative of threshold only.
+        x_lb, x_ub = Var('x_lb', 0.1), Var('x_ub', 0.9)
+        y_lb, y_ub = Var('y_lb', 0.1), Var('y_ub', 0.9)
+        integral = Teg(x_lb, x_ub,  # self.near_zero, self.one,
+                       Teg(y_lb, y_ub,  # self.near_zero, self.one,
+                           scale_map(translate_map(IfElse(x_st * y_st > t, 1, 0))), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t, t1, t2, t3, t4])
+
+        fd_d_t = finite_difference(reduce_to_base(integral), t, bindings=bindings)
+        fd_d_t1 = finite_difference(reduce_to_base(integral), t1, bindings=bindings)
+        fd_d_t2 = finite_difference(reduce_to_base(integral), t2, bindings=bindings)
+        fd_d_t3 = finite_difference(reduce_to_base(integral), t3, bindings=bindings)
+        fd_d_t4 = finite_difference(reduce_to_base(integral), t4, bindings=bindings)
+
+        d_t_expr = reduce_to_base(d_t_expr)
+        # print([fd_d_t, fd_d_t1, fd_d_t2, fd_d_t3, fd_d_t4])
+        check_nested_lists(self, evaluate(d_t_expr, num_samples=1000, bindings=bindings),
+                           [fd_d_t, fd_d_t1, fd_d_t2, fd_d_t3, fd_d_t4], places=2)
+
+    def test_hyperbolic_map_negative(self):
+        x = TegVar('x')
+        y = TegVar('y')
+        t = Var('t')
+
+        # Derivative of threshold only.
+        integral = Teg(-self.one, Const(-10e-4),
+                       Teg(-self.one, Const(-10e-4),
+                           IfElse(x * y > t, 1, 0), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
+        fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
+        d_t_expr = reduce_to_base(d_t_expr)
+        self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000), fd_d_t, places=2)
+
+        # Derivative of threshold with scaling
+        integral = Teg(-self.one, Const(-0.3),
+                       Teg(-self.one, Const(-0.3),
+                           IfElse(2 * x * y > t, 1, 0), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
+        fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
+        d_t_expr = reduce_to_base(d_t_expr)
+        self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000), fd_d_t, places=2)
+        # print(fd_d_t)
+
+    def test_hyperbolic_full_domain(self):
+        x = TegVar('x')
+        y = TegVar('y')
+        t = Var('t')
+
+        c_xy = Var('c_xy')
+
+        # Derivative of threshold only.
+        integral = Teg(-self.one, self.one,
+                       Teg(-self.one, self.one,
+                           IfElse(x * y > t, 1, 0), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
+        fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
+        d_t_expr = reduce_to_base(d_t_expr)
+        self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000), fd_d_t, places=2)
+
+        # Derivative of threshold with scaling
+        integral = Teg(-self.one, self.one,
+                       Teg(-self.one, self.one,
+                           IfElse(c_xy * x * y > t, 1, 0), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
+        _, d_cxy_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[c_xy])
+        fd_d_t = finite_difference(integral, t, bindings={t: 0.5, c_xy: 2.0})
+        fd_d_cxy = finite_difference(integral, c_xy, bindings={t: 0.5, c_xy: 2.0})
+        d_t_expr = reduce_to_base(d_t_expr)
+        d_cxy_expr = reduce_to_base(d_cxy_expr)
+        self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000, bindings={t: 0.5, c_xy: 2.0}), fd_d_t, places=2)
+        self.assertAlmostEqual(evaluate(d_cxy_expr, num_samples=1000, bindings={t: 0.5, c_xy: 2.0}), fd_d_cxy, places=2)
+        # print(fd_d_t)
+        # print(fd_d_cxy)
+
+    def test_non_centered_hyperbola(self):
+        x = TegVar('x')
+        y = TegVar('y')
+        t = Var('t')
+
+        # Derivative of threshold only.
+        integral = Teg(-self.one, self.one,
+                       Teg(-self.one, self.one,
+                           IfElse(x * y + 0.1 * x + 0.1 * y > t, 1, 0), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
+        fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
+        d_t_expr = reduce_to_base(d_t_expr)
+        # print(fd_d_t)
+        self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000), fd_d_t, places=2)
+
+        # Derivative of threshold (mirrored axes).
+        integral = Teg(-self.one, self.one,
+                       Teg(-self.one, self.one,
+                           IfElse(x * y + 0.1 * x + 0.1 * y < -t, 1, 0), y
+                           ), x
+                       )
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
+        fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
+        d_t_expr = reduce_to_base(d_t_expr)
+        print(fd_d_t)
+        self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000), fd_d_t, places=2)
+
+    def test_parametric_hyperbola(self):
+        x = TegVar('x')
+        y = TegVar('y')
+
+        t = Var('t')
+        c_xy = TegVar('c_xy')
+        c_x = TegVar('c_x')
+        c_y = TegVar('c_y')
+        c_1 = TegVar('c_1')
+
+        bindings = {c_xy: 1.2, c_x: 0.1, c_y: 0.1, c_1: 0, t: 0.5}
+        # Derivative of threshold only.
+        integral = Teg(self.near_zero, self.one,
+                       Teg(self.near_zero, self.one,
+                           IfElse(c_xy * x * y + c_x * x + c_y * y + c_1 < -t, 1, 0), y
+                           ), x
+                       )
+
+        fd_d_t = finite_difference(integral, t, bindings=bindings)
+        fd_d_cxy = finite_difference(integral, c_xy, bindings=bindings)
+        fd_d_cx = finite_difference(integral, c_x, bindings=bindings)
+        fd_d_cy = finite_difference(integral, c_y, bindings=bindings)
+        fd_d_c1 = finite_difference(integral, c_1, bindings=bindings)
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t, c_xy, c_x, c_y, c_1])
+        d_t_expr = reduce_to_base(d_t_expr)
+
+        # print([fd_d_t, fd_d_cxy, fd_d_cx, fd_d_cy, fd_d_c1])
+        check_nested_lists(self, evaluate(d_t_expr, num_samples=1000, bindings=bindings),
+                           [fd_d_t, fd_d_cxy, fd_d_cx, fd_d_cy, fd_d_c1], places=2)
+
+    def test_bilinear_interpolation(self):
+        x = TegVar('x')
+        y = TegVar('y')
+        t = Var('t')
+
+        c00 = Var('c00')
+        c01 = Var('c01')
+        c10 = Var('c10')
+        c11 = Var('c11')
+
+        bilinear_lerp = (c00 * (1 - x) + c01 * (x)) * (1 - y) +\
+                        (c10 * (1 - x) + c11 * (x)) * (y)
+
+        # Derivative of threshold only.
+        integral = Teg(self.near_zero, self.near_one,
+                       Teg(self.near_zero, self.near_one,
+                           IfElse(bilinear_lerp > t, 1, 0), y
+                           ), x
+                       )
+        # bindings = {c00: 0.9, c11: 0.9, c01: 0.1, c10: 0.1, t: 0.55}
+        bindings = {c00: 0.1, c11: 0.1, c01: 0.9, c10: 0.9, t: 0.55}
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t, c00, c01, c10, c11])
+        """
+        fd_d_t = finite_difference(integral, t, bindings=bindings)
+        fd_d_c00 = finite_difference(integral, c00, bindings=bindings)
+        fd_d_c01 = finite_difference(integral, c01, bindings=bindings)
+        fd_d_c10 = finite_difference(integral, c10, bindings=bindings)
+        fd_d_c11 = finite_difference(integral, c11, bindings=bindings)
+        """
+
+        (fd_d_t, fd_d_c00, fd_d_c01, fd_d_c10, fd_d_c11) = \
+        [-2.549875, 0.5577500000000026, 0.7168749999999987, 0.7167500000000021, 0.5577500000000026]
+
+        d_t_expr = simplify(reduce_to_base(simplify(d_t_expr)))
+        # print(d_t_expr)
+        # print([fd_d_t, fd_d_c00, fd_d_c01, fd_d_c10, fd_d_c11])
+        check_nested_lists(self, evaluate(d_t_expr, num_samples=1000, bindings=bindings),
+                           [fd_d_t, fd_d_c00, fd_d_c01, fd_d_c10, fd_d_c11], places=2)
+
+    def test_bicubic_interpolation(self):
+        x = TegVar('x')
+        y = TegVar('y')
+        t = Var('t')
+
+        c00 = Var('c00')
+        c01 = Var('c01')
+        c10 = Var('c10')
+        c11 = Var('c11')
+
+        map_x_smoothstep, x_ = smoothstep(x)
+        map_y_smoothstep, y_ = smoothstep(y)
+
+        bicubic_lerp = (c00 * (1 - x_) + c01 * (x_)) * (1 - y_) +\
+                       (c10 * (1 - x_) + c11 * (x_)) * (y_)
+
+        # Derivative of threshold only.
+        integral = Teg(self.near_zero, self.near_one,
+                       Teg(self.near_zero, self.near_one,
+                           map_x_smoothstep(map_y_smoothstep(
+                                IfElse(bicubic_lerp > t, 1, 0)
+                            )), y
+                           ), x
+                       )
+        # bindings = {c00: 0.9, c11: 0.9, c01: 0.1, c10: 0.1, t: 0.55}
+        bindings = {c00: 0.1, c11: 0.1, c01: 0.9, c10: 0.9, t: 0.55}
+
+        _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t, c00, c01, c10, c11])
+
+        integral = reduce_to_base(integral)
+        fd_d_t = finite_difference(integral, t, bindings=bindings, num_samples=20000, delta=0.002)
+        fd_d_c00 = finite_difference(integral, c00, bindings=bindings, num_samples=20000, delta=0.002)
+        fd_d_c01 = finite_difference(integral, c01, bindings=bindings, num_samples=20000, delta=0.002)
+        fd_d_c10 = finite_difference(integral, c10, bindings=bindings, num_samples=20000, delta=0.002)
+        fd_d_c11 = finite_difference(integral, c11, bindings=bindings, num_samples=20000, delta=0.002)
+
+        d_t_expr = simplify(reduce_to_base(simplify(d_t_expr)))
+        # print(d_t_expr)
+        # print([fd_d_t, fd_d_c00, fd_d_c01, fd_d_c10, fd_d_c11])
+        check_nested_lists(self, evaluate(d_t_expr, num_samples=3000, bindings=bindings),
+                           [fd_d_t, fd_d_c00, fd_d_c01, fd_d_c10, fd_d_c11], places=1)
 
 
 class PolarMapTests(TestCase):

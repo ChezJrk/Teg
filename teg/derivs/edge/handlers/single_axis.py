@@ -56,7 +56,10 @@ class ConstantAxisHandler(AffineHandler):
 
     def accept(delta, not_ctx=set()):
         # Check if there is only one TegVar and one constant
-        return check_single_linear_var(delta.expr, not_ctx)
+        try:
+            return check_single_linear_var(delta.expr, not_ctx)
+        except AssertionError:
+            return False
 
     def rewrite(delta, not_ctx=set()):
         affine_list = extract_coefficients_from_affine(delta.expr, {(var.name, var.uid) for var in not_ctx})

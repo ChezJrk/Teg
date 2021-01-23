@@ -26,20 +26,20 @@ from teg.lang.markers import (
     Placeholder,
     # TegRemap
 )
-from teg.passes.substitute import substitute
-# from teg.passes.remap import remap, is_remappable
 
-# from .edge.rotated import rotated_delta_contribution
-from .edge.common import primitive_booleans_in
+from teg.passes.substitute import substitute
+from teg.lang.extended_utils import extract_vars
+from .edge.common import primitive_booleans_in, extend_dependencies
 
 
 def boundary_contribution(expr: ITeg,
                           ctx: Dict[Tuple[str, int], ITeg],
-                          not_ctx: Set[Tuple[str, int]]
+                          not_ctx: Set[Tuple[str, int]],
+                          deps: Dict[TegVar, Set[Var]]
                           ) -> Tuple[ITeg, Dict[Tuple[str, int], str], Set[Tuple[str, int]]]:
     """ Apply Leibniz rule directly for moving boundaries. """
-    lower_deriv, ctx1, not_ctx1, _ = fwd_deriv_transform(expr.lower, ctx, not_ctx, set())
-    upper_deriv, ctx2, not_ctx2, _ = fwd_deriv_transform(expr.upper, ctx, not_ctx, set())
+    lower_deriv, ctx1, not_ctx1, _ = fwd_deriv_transform(expr.lower, ctx, not_ctx, deps)
+    upper_deriv, ctx2, not_ctx2, _ = fwd_deriv_transform(expr.upper, ctx, not_ctx, deps)
     body_at_upper = substitute(expr.body, expr.dvar, expr.upper)
     body_at_lower = substitute(expr.body, expr.dvar, expr.lower)
 
@@ -50,11 +50,13 @@ def boundary_contribution(expr: ITeg,
 def fwd_deriv_transform(expr: ITeg,
                         ctx: Dict[Tuple[str, int], ITeg],
                         not_ctx: Set[Tuple[str, int]],
-                        teg_list: Set[Tuple[TegVar, ITeg, ITeg]]
+                        deps: Dict[TegVar, Set[Var]]
                         ) -> Tuple[ITeg, Dict[Tuple[str, int], str], Set[Tuple[str, int]]]:
     """Compute the source-to-source foward derivative of the given expression."""
     if isinstance(expr, TegVar):
-        if (expr.name, expr.uid) not in not_ctx and (expr.name, expr.uid) in ctx:
+        if (((expr.name, expr.uid) not in not_ctx or
+             {(v.name, v.uid) for v in extend_dependencies({expr}, deps)} - not_ctx)
+            and (expr.name, expr.uid) in ctx):
             expr = ctx[(expr.name, expr.uid)]
         else:
             expr = Const(0)
@@ -76,21 +78,21 @@ def fwd_deriv_transform(expr: ITeg,
             expr = Const(0)
 
     elif isinstance(expr, SmoothFunc):
-        in_deriv_expr, ctx, not_ctx, teg_list = fwd_deriv_transform(expr.expr, ctx, not_ctx, teg_list)
+        in_deriv_expr, ctx, not_ctx, deps = fwd_deriv_transform(expr.expr, ctx, not_ctx, deps)
         deriv_expr = expr.fwd_deriv(in_deriv_expr=in_deriv_expr)
         expr = deriv_expr
 
     elif isinstance(expr, Add):
         def union(out1, out2):
-            e1, ctx1, not_ctx1, teg_list1 = out1
-            e2, ctx2, not_ctx2, teg_list2 = out2
-            return expr.operation(e1, e2), {**ctx1, **ctx2}, not_ctx1 | not_ctx2, teg_list1 | teg_list2
+            e1, ctx1, not_ctx1, deps1 = out1
+            e2, ctx2, not_ctx2, deps2 = out2
+            return expr.operation(e1, e2), {**ctx1, **ctx2}, not_ctx1 | not_ctx2, {**deps1, **deps2}
 
         e_all = Const(0)
         for child in expr.children:
-            e, ctx, not_ctx, teg_list = fwd_deriv_transform(
+            e, ctx, not_ctx, deps = fwd_deriv_transform(
                                         child, ctx,
-                                        not_ctx, teg_list
+                                        not_ctx, deps
                                     )
             e_all = e_all + e
 
@@ -103,12 +105,12 @@ def fwd_deriv_transform(expr: ITeg,
 
         (fwd_deriv_expr1, ctx1, not_ctx1, _) = fwd_deriv_transform(
                                                     expr1, ctx,
-                                                    not_ctx, teg_list
+                                                    not_ctx, deps
                                                )
 
         (fwd_deriv_expr2, ctx2, not_ctx2, _) = fwd_deriv_transform(
                                                     expr2, ctx,
-                                                    not_ctx, teg_list
+                                                    not_ctx, deps
                                                )
 
         expr = expr1 * fwd_deriv_expr2 + expr2 * fwd_deriv_expr1
@@ -116,23 +118,23 @@ def fwd_deriv_transform(expr: ITeg,
         not_ctx = not_ctx1 | not_ctx2
 
     elif isinstance(expr, Invert):
-        deriv_expr, ctx, not_ctx, teg_list = fwd_deriv_transform(expr.child, ctx, not_ctx, teg_list)
+        deriv_expr, ctx, not_ctx, deps = fwd_deriv_transform(expr.child, ctx, not_ctx, deps)
         expr = -expr * expr * deriv_expr
 
     elif isinstance(expr, IfElse):
-        if_body, ctx, not_ctx1, _ = fwd_deriv_transform(expr.if_body, ctx, not_ctx, teg_list)
-        else_body, ctx, not_ctx2, _ = fwd_deriv_transform(expr.else_body, ctx, not_ctx, teg_list)
+        if_body, ctx, not_ctx1, _ = fwd_deriv_transform(expr.if_body, ctx, not_ctx, deps)
+        else_body, ctx, not_ctx2, _ = fwd_deriv_transform(expr.else_body, ctx, not_ctx, deps)
         # ctx = {**ctx1, **ctx2}
         not_ctx = not_ctx1 | not_ctx2
 
         deltas = Const(0)
         # print(not_ctx)
-        for boolean in primitive_booleans_in(expr.cond, not_ctx):
+        for boolean in primitive_booleans_in(expr.cond, not_ctx, deps):
             # print(f'Boolean {boolean}')
             jump = substitute(expr, boolean, true) - substitute(expr, boolean, false)
             delta_expr = boolean.right_expr - boolean.left_expr
 
-            delta_deriv, ctx, _ignore_not_ctx, _ = fwd_deriv_transform(delta_expr, ctx, not_ctx, teg_list)
+            delta_deriv, ctx, _ignore_not_ctx, _ = fwd_deriv_transform(delta_expr, ctx, not_ctx, deps)
             deltas = deltas + delta_deriv * jump * Delta(delta_expr)
 
         expr = IfElse(expr.cond, if_body, else_body) + deltas
@@ -142,7 +144,7 @@ def fwd_deriv_transform(expr: ITeg,
         not_ctx.discard(expr.dvar.name)  # TODO: Why is this here?
 
         # Include derivative contribution from moving boundaries of integration
-        boundary_val, new_ctx, new_not_ctx = boundary_contribution(expr, ctx, not_ctx)
+        boundary_val, new_ctx, new_not_ctx = boundary_contribution(expr, ctx, not_ctx, deps)
         not_ctx.add((expr.dvar.name, expr.dvar.uid))
 
         """
@@ -156,14 +158,13 @@ def fwd_deriv_transform(expr: ITeg,
         """
         delta_val = Const(0)
 
-        delta_set = rotated_delta_contribution(expr, not_ctx, teg_list | {(expr.dvar, expr.lower, expr.upper)})
+        delta_set = rotated_delta_contribution(expr, not_ctx, deps | {(expr.dvar, expr.lower, expr.upper)})
         for delta_expression, distance_to_delta, remapping in delta_set:
             distance_derivative, ctx, not_ctx, _ = fwd_deriv_transform(distance_to_delta, ctx, not_ctx, set())
             delta_val += remapping(delta_expression * distance_derivative)
         """
 
-        body, ctx, not_ctx, _ = fwd_deriv_transform(expr.body, ctx, not_ctx,
-                                                    teg_list | {(expr.dvar, expr.lower, expr.upper)})
+        body, ctx, not_ctx, _ = fwd_deriv_transform(expr.body, ctx, not_ctx, deps)
 
         ctx.update(new_ctx)
         not_ctx |= new_not_ctx
@@ -172,7 +173,7 @@ def fwd_deriv_transform(expr: ITeg,
     elif isinstance(expr, Tup):
         new_expr_list, new_ctx, new_not_ctx = [], Ctx(), set()
         for child in expr:
-            child, ctx, not_ctx, _ = fwd_deriv_transform(child, ctx, not_ctx, teg_list)
+            child, ctx, not_ctx, _ = fwd_deriv_transform(child, ctx, not_ctx, deps)
             new_expr_list.append(child)
             new_ctx.update(ctx)
             new_not_ctx |= not_ctx
@@ -183,18 +184,21 @@ def fwd_deriv_transform(expr: ITeg,
 
         # Compute derivatives of each expression and bind them to the corresponding dvar
         new_vars_with_derivs, new_exprs_with_derivs = list(expr.new_vars), list(expr.new_exprs)
+        new_deps = {}
         for v, e in zip(expr.new_vars, expr.new_exprs):
             if v in expr.expr:
                 # By not passing in the updated contexts, require independence of exprs in the body of the let expression
-                de, ctx, not_ctx, _ = fwd_deriv_transform(e, ctx, not_ctx, teg_list)
+                de, ctx, not_ctx, _ = fwd_deriv_transform(e, ctx, not_ctx, deps)
                 ctx[(v.name, v.uid)] = Var(f'd{v.name}')
                 new_vars_with_derivs.append(ctx[(v.name, v.uid)])
                 new_exprs_with_derivs.append(de)
+                new_deps[v] = extract_vars(e)
 
+        deps = {**deps, **new_deps}
         # We want an expression in terms of f'd{var_in_let_body}'
         # This means that they are erroniously added to ctx, so we
         # remove them from ctx!
-        dexpr, ctx, not_ctx, _ = fwd_deriv_transform(expr.expr, ctx, not_ctx, teg_list)
+        dexpr, ctx, not_ctx, _ = fwd_deriv_transform(expr.expr, ctx, not_ctx, deps)
         [ctx.pop((c.name, c.uid), None) for c in expr.new_vars]
 
         expr = LetIn(Tup(*new_vars_with_derivs), Tup(*new_exprs_with_derivs), dexpr)
@@ -206,7 +210,7 @@ def fwd_deriv_transform(expr: ITeg,
         for v, e in zip(expr.targets, expr.target_exprs):
             if v in expr.expr:
                 # By not passing in the updated contexts, require independence of exprs in the body of the let expression
-                de, ctx, not_ctx, _ = fwd_deriv_transform(e, ctx, not_ctx, teg_list)
+                de, ctx, not_ctx, _ = fwd_deriv_transform(e, ctx, not_ctx, deps)
                 ctx[(v.name, v.uid)] = Var(f'd{v.name}')
                 new_vars_with_derivs.append(ctx[(v.name, v.uid)])
                 new_exprs_with_derivs.append(de)
@@ -216,7 +220,7 @@ def fwd_deriv_transform(expr: ITeg,
         # We want an expression in terms of f'd{var_in_let_body}'
         # This means that they are erroniously added to ctx, so we
         # remove them from ctx!
-        dexpr, ctx, not_ctx, _ = fwd_deriv_transform(expr.expr, ctx, not_ctx, teg_list)
+        dexpr, ctx, not_ctx, _ = fwd_deriv_transform(expr.expr, ctx, not_ctx, deps)
         [ctx.pop((c.name, c.uid), None) for c in expr.targets]
 
         expr = LetIn(Tup(*new_vars_with_derivs), Tup(*new_exprs_with_derivs),
@@ -235,7 +239,7 @@ def fwd_deriv_transform(expr: ITeg,
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported fwd_derivative.')
 
     # print(ctx)
-    return expr, ctx, not_ctx, teg_list
+    return expr, ctx, not_ctx, deps
 
 
 def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]]) -> ITeg:
@@ -255,7 +259,7 @@ def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]]) -> ITeg:
     # print('OLD: ')
     # print(expr)
     # After fwd_deriv_transform, expr will have unbound infinitesimals
-    full_expr, ctx, not_ctx, _ = fwd_deriv_transform(expr, ctx_map, set(), set())
+    full_expr, ctx, not_ctx, _ = fwd_deriv_transform(expr, ctx_map, set(), {})
 
     # Resolve all TegRemap expressions by lifting expressions
     # out of the tree.

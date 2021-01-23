@@ -33,7 +33,7 @@ from teg.passes.base import base_pass
 from teg.passes.substitute import substitute
 from teg.derivs import fwd_deriv
 from functools import reduce
-
+import operator
 
 def is_base_language(expr: ITeg):
     """
@@ -132,6 +132,20 @@ def resolve_placeholders(expr: ITeg,
         expr = substitute(expr, Placeholder(signature=key), p_expr)
 
     return expr
+
+
+def extract_vars(expr: ITeg):
+    if isinstance(expr, (Const, Placeholder)):
+        return set()
+
+    if isinstance(expr, Var):
+        return {expr}
+
+    if hasattr(expr, 'children'):
+        return reduce(operator.or_, [extract_vars(child) for child in expr.children], set())
+    else:
+        return set()
+
 
 """
 def top_level_instance_of(expr: ITeg, fn: Func):
