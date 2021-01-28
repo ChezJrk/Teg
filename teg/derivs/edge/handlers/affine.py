@@ -72,7 +72,6 @@ class AffineHandler(DeltaHandler):
         normalized_set, normalization_var, normalization_expr = normalize_linear_set(linear_set)
 
         # Evaluate the discontinuity at x = t+
-        # TODO: Rewrite so it works for a general reparameterization.
         dvar = target_vars[0]
         expr_for_dvar = -constant_coefficient(affine_set) * normalization_var
 
@@ -93,11 +92,6 @@ class AffineHandler(DeltaHandler):
                                         target_index=idx,
                                         target_vars=target_vars,
                                         source_vars=source_vars) for idx, target_var in enumerate(target_vars)])
-
-        # print('AFFINE')
-        # print(target_vars[0])
-        # print(target_exprs[0])
-        # print(dvar + expr_for_dvar)
 
         return LetIn([normalization_var], [normalization_expr],
                      BiMap(expr=Delta(dvar - expr_for_dvar),
@@ -122,10 +116,7 @@ def combine_affine_sets(affine_lists: List[Dict[Tuple[str, int], ITeg]], op):
     combined_set = {}
     if op == operator.mul:
         # Cartesian product. Produce every variable combination.
-        # TODO: Fix this asap..
-        # print([ item for item in affine_lists[0].items() ])
         affine_products = product(*[affine_list.items() for affine_list in affine_lists])
-        # print([ a for a in affine_products ])
         for affine_product in affine_products:
             combined_variable = [var_expr[0] for var_expr in affine_product]
             k = [var_expr[1] for var_expr in affine_product]
@@ -274,7 +265,6 @@ def rotate_to_source(linear_set: Dict[Tuple[str, int], ITeg],
         return sum((Const(1) if i == 0 else Const(-1)) * exprs[i] * target_vars[i] for i in range(num_vars))
     elif source_index < len(linear_set):
         i = source_index
-        # TODO: Potential change here.. (not considering the top row)
         inverse_rotation = sum(((Const(1) if i == j else Const(0))
                                - (exprs[i] * exprs[j]) / (1 + exprs[0])) * target_vars[j]
                                for j in range(1, num_vars))

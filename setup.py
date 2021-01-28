@@ -1,4 +1,3 @@
-# TODO
 import setuptools
 
 with open("README.md", "r") as fh:
@@ -7,8 +6,8 @@ with open("README.md", "r") as fh:
 setuptools.setup(
     name="teg",
     version="0.0.1",
-    author="Jesse Michel, Sai Bangaru",
-    author_email="sbangaru@mit.edu",  # Apparently can't put two email IDs
+    author="Anonymous Authors",
+    author_email="anonymous@double.blind",
     description="Teg: A framework for generalized differentiable computation",
     long_description=long_description,
     long_description_content_type="text/markdown",

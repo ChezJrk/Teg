@@ -60,7 +60,6 @@ def remap(expr: ITeg):
 
     expr = substitute(expr, remap_expr, Const(0))
 
-    # Find normalization if it exists. TODO: This is hacky.. fix later
     normalization_map = [(r_var, r_expr) for r_var, r_expr in remap_expr.exprs.items() if r_var[0] == '__norm__']
 
     var_list = Tup(*[Var(name=name, uid=uid) for (name, uid) in remap_expr.exprs.keys() if name != '__norm__'])
@@ -108,7 +107,7 @@ def remap_gather(expr: ITeg):
 
         # Lookup remapped variable.
         if (expr.dvar.name, expr.dvar.uid) not in remap_expr.map:
-            remapped_tree = Teg(expr.lower, expr.upper, remapped_tree, expr.dvar)  # TODO: Double check positions
+            remapped_tree = Teg(expr.lower, expr.upper, remapped_tree, expr.dvar)
             return remap_expr, remapped_tree, teg_list
         else:
             new_name, new_id = remap_expr.map[(expr.dvar.name, expr.dvar.uid)]

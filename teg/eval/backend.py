@@ -15,7 +15,6 @@ def evaluate(expr: ITeg, bindings={}, backend=None, **kwargs):
         setattr(expr, 'mode_cache', {})
         setattr(expr, 'mode_options', kwargs)
 
-    # TODO: Replace with priorities if we use more modes later..
     if backend is None:
         backend = 'C'
 

@@ -15,7 +15,6 @@ import numpy as np
 class Sqrt(SmoothFunc):
     """
         y = sqrt(x)
-        TODO: Do we need bounds checks?
     """
     def __init__(self, expr: ITeg, name: str = "Sqrt"):
         super(Sqrt, self).__init__(expr=expr, name=name)

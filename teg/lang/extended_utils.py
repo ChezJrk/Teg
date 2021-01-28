@@ -28,7 +28,6 @@ from teg.lang.markers import (
 )
 
 
-# TODO: Use immutable pass soon.
 from teg.passes.base import base_pass
 from teg.passes.substitute import substitute
 from teg.derivs import fwd_deriv

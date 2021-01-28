@@ -267,11 +267,6 @@ class TestReverseDerivatives(unittest.TestCase):
         for r, e in zip(evaluate(deriv_expr), expected):
             self.assertEqual(r, e)
 
-# TODO: Factor out all shared functions to distill testing code
-# TODO: Implement derivatives
-# deriv (\int_-1^1 \int_{t}^{t+1} xt dx dt) x
-# deriv (\int_-1^1 \int_{t}^{t+1} xt dx dt) t
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -37,7 +37,6 @@ import operator
 from copy import copy
 
 # In order of precedence..
-# TODO: Change that when possible.
 HANDLERS = [
     single_axis.ConstantAxisHandler,
     affine.AffineHandler,
@@ -160,10 +159,6 @@ def split_instance(expr: ITeg, t_expr: ITeg):
     n_expr such that t_expr = (let_instance expr = 0 in t_expr) + n_expr
     (expr is linear in t_expr)
     """
-    # print(expr)
-    # print('\n\n')
-    # print(t_expr)
-    # print('\n\n')
 
     def inner_fn(e, ctx):
         ctx = {'expr': e, 'is_expr': expr is e}
@@ -183,8 +178,7 @@ def split_instance(expr: ITeg, t_expr: ITeg):
                f'expr is contained in a non-linear function {type(e)}'
         if isinstance(e, Add):
             if ctx['has_expr']:
-                # print('FOUND ADD. Taking branch')
-                # print(ctx['has_exprs'])
+
                 assert sum(ctx['has_exprs']) == 1, 'More than one branch with expr'
                 ctx['expr'] = ctx['exprs'][ctx['has_exprs'].index(True)]
                 return ctx['expr'], ctx
@@ -302,25 +296,20 @@ def normalize_deltas(expr: Delta):
 
     def outer_fn(e, ctx):
         if isinstance(e, Delta):
-            # print(ctx['upper_depvars'])
             depvars = list(tegvar for tegvar in (ctx['upper_depvars'] - ctx['upper_tegvars']) if tegvar in e)
             assert not depvars,\
                    f'Delta expression {e} is not explicitly affine: ({depvars}) '\
                    f'is/are dependent on one or more of {ctx["upper_tegvars"]} '\
                    f'through one-way let expressions. Use bijective maps (BiMap) instead'
             if (not any([k in ctx['upper_tegvars'] for k in ctx['lower_tegvars']])) or (not ctx['lower_tegvars']):
-                # print(f'Not rewriting delta: {e} {ctx["upper_tegvars"]} {ctx["lower_tegvars"]}')
                 return Const(0), ctx
             else:
-                # while not is_delta_normal(e):
                 if not is_delta_normal(e):
                     accepts = [handler.accept(e, set(ctx['upper_tegvars'])) for handler in HANDLERS]
                     assert any(accepts), f'Cannot find any handler for delta expression {e}'
 
                     handler = HANDLERS[accepts.index(True)]
-                    # print(f'Rewriting delta: {e} {ctx["upper_tegvars"]}, with handler {handler.__name__}')
                     e = handler.rewrite(e, set(ctx['upper_tegvars']))
-                    # print(f'Rewritten delta: {e}')
                     e = normalize_deltas(e)  # Normalize further if necessary
 
                 return e, ctx
@@ -347,8 +336,6 @@ def reparameterize(bimap: BiMap, expr: ITeg):
     # find bimap and all superseding integrals
     # substitute for integrals, generate let exprs, multiply inv_jacobian
 
-    # TODO: Put bounds checks in there too.
-
     def inner_fn(e, ctx):
         if isinstance(e, Teg):
             return e, {'is_expr': bimap is e,
@@ -365,9 +352,6 @@ def reparameterize(bimap: BiMap, expr: ITeg):
 
     def outer_fn(e, ctx):
         if isinstance(e, BiMap) and (bimap is e):
-            # TODO: Temporary fix.
-            # assert all([k in ctx['upper_tegvars'] for k in e.sources]),\
-            #       f'Attempting to map non-Teg vars {e.sources}, {ctx["upper_tegvars"]}'
             if not all([k in ctx['upper_tegvars'] for k in e.sources]):
                 # BiMap is invalid, null everything.
                 print(f'WARNING: Attempting to map non-Teg vars {e.sources}, {ctx["upper_tegvars"]}')
@@ -376,12 +360,9 @@ def reparameterize(bimap: BiMap, expr: ITeg):
             bounds_checks = reduce(operator.and_,
                                    [(lb < dvar) & (ub > dvar) for (dvar, (lb, ub)) in ctx['source_bounds'].items()])
             reparamaterized_expr = IfElse(bounds_checks, e.expr * e.inv_jacobian, Const(0))
-            # print(f'\n\nREPLACING BIMAP WITH ')
-            # print(reparamaterized_expr)
-            # print('\n\n')
+
             return (reparamaterized_expr,
                     {**ctx,
-                     # 'teg_replace': {s: t for s, t in zip(e.sources, e.targets)},
                      'teg_sources': list(e.sources),
                      'teg_targets': list(e.targets),
                      'let_mappings': {s: sexpr for s, sexpr in zip(e.sources, e.source_exprs)},
@@ -389,12 +370,10 @@ def reparameterize(bimap: BiMap, expr: ITeg):
                      'target_upper_bounds': {t: tub for t, tub in zip(e.targets, e.target_upper_bounds)}
                      })
         elif isinstance(e, Teg):
-            # print(ctx)
 
             if e.dvar in ctx.get('teg_sources', {}):
                 ctx['teg_sources'].remove(e.dvar)
                 target_dvar = ctx['teg_targets'].pop()
-                # print(f'REPLACING TEG {e.dvar}')
                 placeholders = {
                     **{f'{svar.uid}_ub': upper for svar, (lower, upper) in ctx['source_bounds'].items()},
                     **{f'{svar.uid}_lb': lower for svar, (lower, upper) in ctx['source_bounds'].items()}
@@ -421,7 +400,6 @@ def reparameterize(bimap: BiMap, expr: ITeg):
 
                     # Add dependent mappings here.
                     for new_vars, new_exprs in ctx.get('dependent_mappings', []):
-                        # print(f'ADDING DEPENDENT MAPPING FOR: {new_vars}')
                         e = LetIn(new_vars, new_exprs, e)
                 return e, ctx
 
@@ -435,8 +413,6 @@ def reparameterize(bimap: BiMap, expr: ITeg):
             """
 
             if len(ctx.get('teg_sources', {})) > 0:
-                # print(f'ENCOUNTERED LET {e.new_vars}')
-                # e contains expr
                 if (any([new_var in map_expr
                          for new_var in e.new_vars
                          for map_vars, map_exprs in ctx.get('dependent_mappings', [])
@@ -444,9 +420,6 @@ def reparameterize(bimap: BiMap, expr: ITeg):
                     any([new_var in map_expr
                          for new_var in e.new_vars
                          for map_var, map_expr in ctx.get('let_mappings', {}).items()])):
-                    # reparametrization is dependent on this let_map. lift this map.
-                    # print('\n\n\nDEPENDENT MAPPING')
-                    # print(f'{e.new_vars}\n\n\n')
 
                     ctx['dependent_mappings'] = [*ctx.get('dependent_mappings', []), (e.new_vars, e.new_exprs)]
                     return e.expr, ctx
@@ -476,7 +449,6 @@ def eliminate_bimaps(expr: ITeg):
     top_level_bimap = top_level_instance_of(expr, lambda a: isinstance(a, BiMap))
     if top_level_bimap is None:
         return expr
-    # print(f'Eliminating Bimap.. {id(top_level_bimap)}')
 
     top_level_delta_of_bimap = top_level_instance_of(top_level_bimap, lambda a: isinstance(a, Delta))
     if top_level_delta_of_bimap is None:
@@ -484,19 +456,12 @@ def eliminate_bimaps(expr: ITeg):
         return eliminate_bimaps(substitute_instance(expr, top_level_bimap, let_expr))
     else:
         linear_expr = split_instance(top_level_bimap, expr)
-        # print(f'\n\n\nBIMAP ELIMINATION (PRE-REMAP) {id(top_level_bimap)} {top_level_bimap.sources}:')
-        # print(expr)
+
         old_tree = substitute_instance(expr, top_level_bimap, Const(0))
         new_tree = tree_copy(reparameterize(top_level_bimap, linear_expr))
         e = old_tree + new_tree
 
-        # print('\n\n\nPOST-REMAP')
-        # print(old_tree)
-        # print('\n\n')
-        # print(new_tree)
-        # print('\n\n')
         return eliminate_bimaps(e)
-        # return eliminate_bimaps(simplify(old_tree)) + eliminate_bimaps(new_tree)
 
 
 def eliminate_deltas(expr: ITeg):
@@ -516,16 +481,13 @@ def eliminate_deltas(expr: ITeg):
         if isinstance(e, Delta) and (ctx['search_expr'] is e):
             assert is_delta_normal(e), f'Delta {e} is not in normal form. Call normalize_delta() first'
             if e.expr not in ctx['upper_tegvars']:
-                # print(f'Eliminating {e}, not covered by any integral: {ctx["upper_tegvars"]}')
                 return Const(0), ctx
             else:
-                # print(f'Eliminating {e}, covered by integral')
                 return Const(1), {**ctx,
                                   'eliminate_tegs': {**ctx['eliminate_tegs'], e.expr: Const(0)}}
 
         elif isinstance(e, Teg):
             if e.dvar in ctx['eliminate_tegs']:
-                # print(f'Eliminating integral associated with {e.dvar}')
                 value = ctx['eliminate_tegs'][e.dvar]
                 bounds_check = (e.lower < value) & (e.upper > value)
                 return (LetIn([e.dvar], [value], IfElse(bounds_check, e.body, Const(0))),

@@ -23,8 +23,7 @@ from teg.lang.extended import (
     Delta
 )
 from teg.lang.markers import (
-    Placeholder,
-    # TegRemap
+    Placeholder
 )
 
 from teg.passes.substitute import substitute
@@ -64,11 +63,7 @@ def fwd_deriv_transform(expr: ITeg,
     elif isinstance(expr, (Const, Placeholder)):
         expr = Const(0)
 
-    # elif isinstance(expr, (TegRemap,)):
-    #    assert False, "Cannot take derivative of transient elements."
-
     elif isinstance(expr, Delta):
-        # assert False, "Cannot take the derivative of a Delta. Reduce all Deltas first"
         expr = Const(0)
 
     elif isinstance(expr, Var):
@@ -99,7 +94,6 @@ def fwd_deriv_transform(expr: ITeg,
         expr = e_all
 
     elif isinstance(expr, Mul):
-        # NOTE: Consider n-ary multiplication.
         assert len(expr.children) == 2, 'fwd_deriv does not currently handle non-binary multiplication'
         expr1, expr2 = [child for child in expr.children]
 
@@ -141,28 +135,11 @@ def fwd_deriv_transform(expr: ITeg,
 
     elif isinstance(expr, Teg):
         assert expr.dvar not in ctx, f'Names of infinitesimal "{expr.dvar}" are distinct from context "{ctx}"'
-        not_ctx.discard(expr.dvar.name)  # TODO: Why is this here?
+        not_ctx.discard(expr.dvar.name)
 
         # Include derivative contribution from moving boundaries of integration
         boundary_val, new_ctx, new_not_ctx = boundary_contribution(expr, ctx, not_ctx, deps)
         not_ctx.add((expr.dvar.name, expr.dvar.uid))
-
-        """
-        moving_var_data = delta_contribution(expr, not_ctx)
-        for (moving_var_delta, expr_for_dvar) in moving_var_data:
-            print(f"Delta: {moving_var_delta}, \n Point-Deriv: {expr_for_dvar} \n")
-            deriv_expr, ctx, not_ctx = fwd_deriv_transform(expr_for_dvar, ctx, not_ctx)
-            delta_val += deriv_expr * moving_var_delta
-        """
-
-        """
-        delta_val = Const(0)
-
-        delta_set = rotated_delta_contribution(expr, not_ctx, deps | {(expr.dvar, expr.lower, expr.upper)})
-        for delta_expression, distance_to_delta, remapping in delta_set:
-            distance_derivative, ctx, not_ctx, _ = fwd_deriv_transform(distance_to_delta, ctx, not_ctx, set())
-            delta_val += remapping(delta_expression * distance_derivative)
-        """
 
         body, ctx, not_ctx, _ = fwd_deriv_transform(expr.body, ctx, not_ctx, deps)
 
@@ -238,7 +215,6 @@ def fwd_deriv_transform(expr: ITeg,
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported fwd_derivative.')
 
-    # print(ctx)
     return expr, ctx, not_ctx, deps
 
 
@@ -260,16 +236,12 @@ def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]], replace_derivs=False
     else:
         ctx_map = {(var.name, var.uid): expr for var, expr in bindings}
 
-    # print('OLD: ')
-    # print(expr)
     # After fwd_deriv_transform, expr will have unbound infinitesimals
     full_expr, ctx, not_ctx, _ = fwd_deriv_transform(expr, ctx_map, set(), {})
 
     # Resolve all TegRemap expressions by lifting expressions
     # out of the tree.
     expr = full_expr
-    # while is_remappable(expr):
-    #    expr = remap(expr)
 
     # Bind the infinitesimals introduced by taking the derivative
     if not replace_derivs:

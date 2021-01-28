@@ -109,7 +109,6 @@ def simplify(expr: ITeg) -> ITeg:
 
         if isinstance(simple1, Mul) and isinstance(simple2, Mul):
             # Distribution.
-            # TODO: Account for second term to be t * '1'
             exprLL, exprLR = simple1.children
             exprRL, exprRR = simple2.children
 
@@ -213,9 +212,6 @@ def simplify(expr: ITeg) -> ITeg:
         return Tup(*(simplify(child) for child in expr))
 
     elif isinstance(expr, LetIn):
-        # TODO: TEMP
-        # if Var(name = "__norm__", uid = 26) in expr.new_vars or len(expr.new_vars) != 1:
-        #    return LetIn(expr.new_vars, Tup(*(simplify(e) for e in expr.new_exprs)), simplify(expr.expr))
 
         simplified_exprs = Tup(*(simplify(e) for e in expr.new_exprs))
         child_expr = simplify(expr.expr)
@@ -256,8 +252,6 @@ def simplify(expr: ITeg) -> ITeg:
     elif isinstance(expr, Delta):
         return Delta(simplify(expr.expr))
 
-    # elif isinstance(expr, (FwdDeriv, RevDeriv)):
-    #     return simplify(expr.deriv_expr)
     elif {'FwdDeriv', 'RevDeriv'} & {t.__name__ for t in type(expr).__mro__}:
         return simplify(expr.__getattribute__('deriv_expr'))
 
@@ -293,15 +287,3 @@ def simplify(expr: ITeg) -> ITeg:
 
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported simplify rule')
-
-    """
-    elif isinstance(expr, TegRemap):
-        return TegRemap(
-                        map=expr.map,
-                        expr=simplify(expr.expr),
-                        exprs=dict([(var, simplify(e)) for var, e in expr.exprs.items()]),
-                        lower_bounds=dict([(var, simplify(e)) for var, e in expr.lower_bounds.items()]),
-                        upper_bounds=dict([(var, simplify(e)) for var, e in expr.upper_bounds.items()]),
-                        source_bounds=expr.source_bounds
-                    )
-    """
