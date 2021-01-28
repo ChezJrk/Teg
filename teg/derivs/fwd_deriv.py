@@ -242,7 +242,7 @@ def fwd_deriv_transform(expr: ITeg,
     return expr, ctx, not_ctx, deps
 
 
-def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]]) -> ITeg:
+def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]], replace_derivs=False) -> ITeg:
     """
     Computes the fwd_derivative of a given expression.
 
@@ -254,7 +254,11 @@ def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]]) -> ITeg:
         Teg: The forward fwd_derivative expression.
     """
     binding_map = {(var.name, var.uid): val for var, val in bindings}
-    ctx_map = {(var.name, var.uid): Var(f'd{var.name}') for var, _ in bindings}
+    if not replace_derivs:
+        # Generate derivative variables
+        ctx_map = {(var.name, var.uid): Var(f'd{var.name}') for var, _ in bindings}
+    else:
+        ctx_map = {(var.name, var.uid): expr for var, expr in bindings}
 
     # print('OLD: ')
     # print(expr)
@@ -268,7 +272,8 @@ def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]]) -> ITeg:
     #    expr = remap(expr)
 
     # Bind the infinitesimals introduced by taking the derivative
-    for name_uid, new_var in ctx.items():
-        expr.bind_variable(new_var, binding_map[name_uid])
+    if not replace_derivs:
+        for name_uid, new_var in ctx.items():
+            expr.bind_variable(new_var, binding_map[name_uid])
 
     return expr

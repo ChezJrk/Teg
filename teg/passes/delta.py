@@ -3,6 +3,7 @@ from functools import reduce
 from typing import List
 from teg.passes.base import base_pass
 from teg.passes.substitute import substitute, substitute_instance
+from teg.passes.simplify import simplify
 from teg import (
     ITeg,
     Add,
@@ -487,14 +488,15 @@ def eliminate_bimaps(expr: ITeg):
         # print(expr)
         old_tree = substitute_instance(expr, top_level_bimap, Const(0))
         new_tree = tree_copy(reparameterize(top_level_bimap, linear_expr))
-        e = old_tree + new_tree\
-            
+        e = old_tree + new_tree
+
         # print('\n\n\nPOST-REMAP')
         # print(old_tree)
         # print('\n\n')
         # print(new_tree)
         # print('\n\n')
         return eliminate_bimaps(e)
+        # return eliminate_bimaps(simplify(old_tree)) + eliminate_bimaps(new_tree)
 
 
 def eliminate_deltas(expr: ITeg):
@@ -547,5 +549,6 @@ def eliminate_deltas(expr: ITeg):
         return expr
     else:
         linear_expr = split_instance(top_level_delta, expr)
-        return eliminate_deltas(substitute_instance(expr, top_level_delta, Const(0)) +
-                                tree_copy(eliminate_delta(top_level_delta, linear_expr)))
+        old_tree = substitute_instance(expr, top_level_delta, Const(0))
+        new_tree = tree_copy(eliminate_delta(top_level_delta, linear_expr))
+        return eliminate_deltas(old_tree + new_tree)
