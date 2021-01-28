@@ -38,41 +38,6 @@ from teg.maps.polar import polar_2d_map
 from teg.maps.transform import scale, translate
 from teg.maps.smoothstep import smoothstep
 
-"""
-def evaluate_c(expr: ITeg, num_samples=5000, ignore_cache=False, silent=True):
-    pcount_before = time.perf_counter()
-    c_code = emit(expr, target='C', num_samples=num_samples)
-    pcount_after = time.perf_counter()
-    if not silent:
-        print(f'Teg-to-C emit time: {pcount_after - pcount_before:.3f}s')
-
-    pcount_before = time.perf_counter()
-    binary = compileProgram(c_code)
-    pcount_after = time.perf_counter()
-    if not silent:
-        print(f'C compile time:     {pcount_after - pcount_before:.3f}s')
-
-    pcount_before = time.perf_counter()
-    value = runProgram(binary)
-    pcount_after = time.perf_counter()
-    if not silent:
-        print(f'C exec time:        {pcount_after - pcount_before:.3f}s')
-
-    return value
-
-
-def evaluate(*args, **kwargs):
-    fast_eval = kwargs.pop('fast_eval', True)
-    if fast_eval:
-        if not kwargs.get('silent', True):
-            print('Evaluating in fast-mode: C')
-        return evaluate_c(*args, **kwargs)
-    else:
-        if not kwargs.get('silent', True):
-            print('Evaluating using numpy/python')
-        return evaluate_numpy(*args, **kwargs)
-"""
-
 
 def finite_difference(expr, var, delta=0.004, num_samples=10000, silent=True, **kwargs):
 
