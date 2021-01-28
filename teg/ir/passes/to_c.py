@@ -468,8 +468,6 @@ class CPass_IfElse:
         else_code, else_functions = tegpass_c(self.else_call, name_ctx, **kwargs)
 
         # Insert assign statements
-        # if_assign_code, _ = tegpass_c(IR_Assign(output=self.output, input=self.if_call.output), name_ctx)
-        # else_assign_code, _ = tegpass_c(IR_Assign(output=self.output, input=self.else_call.output), name_ctx)
 
         # Use paranthesis if code blocks are empty.
         if not if_code:
