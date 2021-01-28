@@ -532,7 +532,7 @@ class VariableBranchConditionsTest(TestCase):
         rev_dintegral = RevDeriv(integral, Tup(Const(1)))
         check_nested_lists(self, evaluate(rev_dintegral), [-1, 0], places=3)
 
-    def test_tzu_mao(self):
+    def test_nested_integral_discontinuities(self):
         # \int_{x=0}^1 x < t ?
         #   \int_{y=0}^1 x < t1 ?
         #     x * y : x * y^2 :
