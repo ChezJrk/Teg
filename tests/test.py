@@ -1587,7 +1587,7 @@ class TransformationTests(TestCase):
         d_t_expr = reduce_to_base(d_t_expr)
         # print('d_t_expr')
         # print(simplify(d_t_expr))
-        print([fd_d_t1, fd_d_t2, fd_d_t3, fd_d_t4])
+        # print([fd_d_t1, fd_d_t2, fd_d_t3, fd_d_t4])
         check_nested_lists(self,
                            evaluate(d_t_expr, num_samples=1000, bindings=bindings),
                            [fd_d_t1, fd_d_t2, fd_d_t3, fd_d_t4],
@@ -1787,7 +1787,7 @@ class HyperbolicMapTests(TestCase):
         _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
         fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
         d_t_expr = reduce_to_base(d_t_expr)
-        print(fd_d_t)
+        # print(fd_d_t)
         self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000), fd_d_t, places=2)
 
     def test_parametric_hyperbola(self):
