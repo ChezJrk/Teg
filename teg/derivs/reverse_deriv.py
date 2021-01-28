@@ -121,12 +121,13 @@ def reverse_deriv_transform(expr: ITeg,
         not_ctx.discard((expr.dvar.name, expr.dvar.uid))
 
         # Apply Leibniz rule directly for moving boundaries
-        lower_derivs = reverse_deriv_transform(expr.lower, out_deriv_vals, not_ctx, deps, args)
-        upper_derivs = reverse_deriv_transform(expr.upper, out_deriv_vals, not_ctx, deps, args)
-        yield from ((name_uid, upper_deriv * substitute(expr.body, expr.dvar, expr.upper))
-                    for name_uid, upper_deriv in upper_derivs)
-        yield from ((name_uid, - lower_deriv * substitute(expr.body, expr.dvar, expr.lower))
-                    for name_uid, lower_deriv in lower_derivs)
+        if not args.get('ignore_bounds', False):
+            lower_derivs = reverse_deriv_transform(expr.lower, out_deriv_vals, not_ctx, deps, args)
+            upper_derivs = reverse_deriv_transform(expr.upper, out_deriv_vals, not_ctx, deps, args)
+            yield from ((name_uid, upper_deriv * substitute(expr.body, expr.dvar, expr.upper))
+                        for name_uid, upper_deriv in upper_derivs)
+            yield from ((name_uid, - lower_deriv * substitute(expr.body, expr.dvar, expr.lower))
+                        for name_uid, lower_deriv in lower_derivs)
 
         not_ctx.add((expr.dvar.name, expr.dvar.uid))
 
