@@ -1,4 +1,4 @@
-from .affine import AffineHandler, extract_coefficients_from_affine, affine_to_linear
+from .affine import AffineHandler, extract_coefficients_from_affine, remove_constant_coeff
 from teg.passes.base import base_pass
 
 
@@ -44,7 +44,7 @@ def check_single_linear_var(expr, not_ctx=set()):
     # print(not_ctx)
     affine_list = extract_coefficients_from_affine(expr, {(var.name, var.uid) for var in not_ctx})
     # print(affine_list)
-    linear_list = affine_to_linear(affine_list)
+    linear_list = remove_constant_coeff(affine_list)
     return (len(linear_list) == 1  # Single variable
             and Const(1) in linear_list.values())  # with a coefficient of 1
 
@@ -54,7 +54,7 @@ class ConstantAxisHandler(AffineHandler):
         Handles expressons of the form (Delta[x + c > 0])
     """
 
-    def accept(delta, not_ctx=set()):
+    def can_rewrite(delta, not_ctx=set()):
         # Check if there is only one TegVar and one constant
         try:
             return check_single_linear_var(delta.expr, not_ctx)

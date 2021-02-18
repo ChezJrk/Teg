@@ -1,5 +1,5 @@
-from typing import Dict, Set, List, Tuple
-from functools import reduce, partial
+from typing import Dict, Set, List, Tuple, Optional, Union
+from functools import reduce
 from itertools import product
 import operator
 
@@ -11,11 +11,8 @@ from teg import (
     Mul,
     Invert,
     IfElse,
-    Teg,
     LetIn,
     TegVar,
-    true,
-    false,
 )
 
 from teg.math import (
@@ -28,76 +25,52 @@ from teg.lang.extended import (
     Delta
 )
 
-from teg.passes.substitute import substitute
-
 from .handler import DeltaHandler
 
 
 class AffineHandler(DeltaHandler):
+    """Accounts for affine discontinuities"""
 
-    def accept(delta, not_ctx=set()):
+    def can_rewrite(delta: Delta, not_ctx: Optional[Set] = None) -> bool:
+        """Check if a given expression is affine. """
+        not_ctx = set() if not_ctx is None else not_ctx
         try:
-            affine_list = extract_coefficients_from_affine(delta.expr, {(var.name, var.uid) for var in not_ctx})
-            assert all([is_expr_parametric(coeff, not_ctx) for coeff in affine_list.values()]), 'Coeffs not parametric'
+            vars_to_coeffs = extract_coefficients_from_affine(delta.expr, {(var.name, var.uid) for var in not_ctx})
+            error_message = 'Coefficients should not contain variables of integration'
+            assert all([is_expr_parametric(coeff, not_ctx) for coeff in vars_to_coeffs.values()]), error_message
             return True
         except AssertionError:
             return False
-        # return check_affine(delta.expr, {(var.name, var.uid) for var in not_ctx})
 
-    def rewrite(delta, not_ctx=set()):
-        # Extract rotation.
-        raw_affine_set = extract_coefficients_from_affine(delta.expr, {(var.name, var.uid) for var in not_ctx})
+    def rewrite(delta: Delta, not_ctx: Optional[Set] = set()) -> ITeg:
+        """Rotates an affine discontinuity so that it's axis-aligned (e.g. ax + by + c -> z + d). """
 
-        # print('raw_affine_set: ', raw_affine_set)
-        # Add a constant term if there isn't one.
+        not_ctx = set() if not_ctx is None else not_ctx
+
+        # Canonicalize affine expression into a map {var: coeff}
+        raw_affine_set = extract_coefficients_from_affine(delta.expr, not_ctx)
+
+        # Introduce a constant term if there isn't one
         if ('__const__', -1) not in raw_affine_set:
             raw_affine_set[('__const__', -1)] = Const(0)
 
-        # Extract source variables (in order).
-        source_vars = [TegVar(name=name, uid=uid) for name, uid in var_list(affine_to_linear(raw_affine_set))]
+        # Extract source variables (in order)
+        source_vars = [TegVar(name=name, uid=uid) for name, uid in var_list(remove_constant_coeff(raw_affine_set))]
 
-        # Create rotated variables.
+        # Create rotated (target) variables
         target_vars = [TegVar(name=f'{var.name}_') for var in source_vars]
 
-        # Identify innermost TegVar.
-        # dvar_idx = source_vars.index(TegVar(name=expr.dvar.name, uid=expr.dvar.uid))
-        dvar_idx = 0
-
-        # Move this TegVar to position 0
-        source_vars = [source_vars[dvar_idx]] + source_vars[:dvar_idx] + source_vars[dvar_idx + 1:]
-        target_vars = [target_vars[dvar_idx]] + target_vars[:dvar_idx] + target_vars[dvar_idx + 1:]
-
+        # TODO: Currently, do not handle degeneracy at -1
         affine_set, flip_condition = negate_degenerate_coeffs(raw_affine_set, source_vars)
-        linear_set = affine_to_linear(affine_set)
-        normalized_set, normalization_var, normalization_expr = normalize_linear_set(linear_set)
+        linear_set = remove_constant_coeff(affine_set)
+        normalized_set, normalization_var, normalization_expr = normalize_linear(linear_set)
 
-        # Evaluate the discontinuity at x = t+
-        # TODO: Rewrite so it works for a general reparameterization.
         dvar = target_vars[0]
-        expr_for_dvar = -constant_coefficient(affine_set) * normalization_var
+        expr_for_dvar = -constant_coeff(affine_set) * normalization_var
 
-        source_exprs = [rotate_to_source(
-                            normalized_set,
-                            source_index=idx,
-                            target_vars=target_vars,
-                            source_vars=source_vars) for idx, source_var in enumerate(source_vars)]
-
-        target_exprs = [rotate_to_target(
-                            normalized_set,
-                            target_index=idx,
-                            target_vars=target_vars,
-                            source_vars=source_vars) for idx, target_var in enumerate(target_vars)]
-
-        lower_bounds, upper_bounds = zip(*[bounds_of(
-                                        normalized_set,
-                                        target_index=idx,
-                                        target_vars=target_vars,
-                                        source_vars=source_vars) for idx, target_var in enumerate(target_vars)])
-
-        # print('AFFINE')
-        # print(target_vars[0])
-        # print(target_exprs[0])
-        # print(dvar + expr_for_dvar)
+        source_exprs = rotate_to_source(normalized_set, target_vars, source_vars)
+        target_exprs = rotate_to_target(normalized_set, source_vars)
+        lower_bounds, upper_bounds = bounds_of(normalized_set, source_vars)
 
         return LetIn([normalization_var], [normalization_expr],
                      BiMap(expr=Delta(dvar - expr_for_dvar),
@@ -110,28 +83,22 @@ class AffineHandler(DeltaHandler):
                            target_upper_bounds=upper_bounds))
 
 
-def transform_expr(expr, transforms: Dict[Tuple[str, int], ITeg]):
-    for var_idname, transform in transforms.items():
-        expr = substitute(expr, TegVar(name=var_idname[0], uid=var_idname[1]), transform)
+def combine_affine_sets(affine_lists: List[Dict[Tuple[str, int], ITeg]], op) -> List[Dict[Tuple[str, int], ITeg]]:
+    """Computes the canonical version of a list of affine expressions using the operator 'op'. """
 
-    return expr
-
-
-def combine_affine_sets(affine_lists: List[Dict[Tuple[str, int], ITeg]], op):
-    # Combine affine sets. Assumes the list satisfies affine properties.
     combined_set = {}
     if op == operator.mul:
-        # Cartesian product. Produce every variable combination.
-        # TODO: Fix this asap..
-        # print([ item for item in affine_lists[0].items() ])
+        # NOTE: this could be made faster by identifying one expression as a constant expression
+        # and doing a linear product instead of the quadratic Cartesian product
+
+        # Distribute out expression with a Cartesian product
         affine_products = product(*[affine_list.items() for affine_list in affine_lists])
-        # print([ a for a in affine_products ])
         for affine_product in affine_products:
             combined_variable = [var_expr[0] for var_expr in affine_product]
             k = [var_expr[1] for var_expr in affine_product]
             combined_expr = reduce(operator.mul, k)
 
-            # Reduce combined variables to primitive variables.
+            # Reduce combined variables to primitive variables
             primitive_variable = None
             is_sample = [sub_var != ('__const__', -1) for sub_var in combined_variable]
             if reduce(operator.or_, is_sample) is False:
@@ -139,8 +106,7 @@ def combine_affine_sets(affine_lists: List[Dict[Tuple[str, int], ITeg]], op):
             elif is_sample.count(True) == 1:
                 primitive_variable = combined_variable[is_sample.index(True)]
             else:
-                raise AssertionError('Error when processing affine sets, \
-                                  encountered non-affine combination.')
+                raise AssertionError('Error when processing affine sets, encountered non-affine product.')
 
             combined_set[primitive_variable] = combined_expr
 
@@ -153,44 +119,30 @@ def combine_affine_sets(affine_lists: List[Dict[Tuple[str, int], ITeg]], op):
                     combined_set[variable] = expr
 
     else:
-        raise AssertionError('Operation not supported')
+        raise AssertionError('Operation not supported.')
 
     return combined_set
 
 
 def is_expr_parametric(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> bool:
+    """Checks whether an expression contains a variable of integration. """
     if isinstance(expr, TegVar):
         return False if (expr.name, expr.uid) in not_ctx else True
     elif isinstance(expr, (Var, Const)):
         return True
     else:
-        return True
-
-    return reduce(operator.and_, [is_expr_parametric(child, not_ctx) for child in expr.children])
+        return reduce(operator.and_, [is_expr_parametric(child, not_ctx) for child in expr.children])
 
 
-def check_affine(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> bool:
-    if isinstance(expr, Mul):
-        cvals = [is_expr_parametric(child, not_ctx) for child in expr.children]
-        return (cvals.count(False) == 1) and check_affine(expr.children[cvals.index(False)], not_ctx)
-    elif isinstance(expr, Add):
-        return reduce(operator.and_, [check_affine(child, not_ctx) for child in expr.children])
-    elif isinstance(expr, TegVar) and (expr.name, expr.uid) in not_ctx:
-        return True
-    elif is_expr_parametric(expr, not_ctx):
-        return True
-    else:
-        return False
-
-
-def extract_coefficients_from_affine(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> Dict[Tuple[str, int], ITeg]:
+def extract_coefficients_from_affine(expr: ITeg, not_ctx: Set[Union[Var, Tuple]]) -> Dict[Tuple[str, int], ITeg]:
+    """Canonicalizes an affine expression to a mapping from variables to coefficients with a constant term. """
     if isinstance(expr, Mul):
         children_coeffs = [extract_coefficients_from_affine(child, not_ctx) for child in expr.children]
         return combine_affine_sets(children_coeffs, op=operator.mul)
     elif isinstance(expr, Add):
         children_coeffs = [extract_coefficients_from_affine(child, not_ctx) for child in expr.children]
         return combine_affine_sets(children_coeffs, op=operator.add)
-    elif isinstance(expr, TegVar) and (expr.name, expr.uid) in not_ctx:
+    elif isinstance(expr, TegVar) and expr in not_ctx:
         return {(expr.name, expr.uid): Const(1)}
     elif is_expr_parametric(expr, not_ctx):
         return {('__const__', -1): expr}
@@ -198,123 +150,122 @@ def extract_coefficients_from_affine(expr: ITeg, not_ctx: Set[Tuple[str, int]]) 
         return {('__const__', -1): Const(0)}
 
 
-def constant_coefficient(affine_set: Dict[Tuple[str, int], ITeg]):
-    if ('__const__', -1) in affine_set:
-        return affine_set[('__const__', -1)]
-    else:
-        return Const(0)
+def constant_coeff(affine: Dict[Tuple[str, int], ITeg]):
+    """Extract the constant coefficient if it exists, otherwise, return 0. """
+    return affine[('__const__', -1)] if ('__const__', -1) in affine else Const(0)
 
 
-def affine_to_linear(affine_set: Dict[Tuple[str, int], ITeg]):
-    linear_set = dict(affine_set)
+def remove_constant_coeff(affine: Dict[Tuple[str, int], ITeg]) -> Dict[Tuple[str, int], ITeg]:
+    """Remove the constant coefficient from an affine set. """
+    linear_set = dict(affine)
     if ('__const__', -1) in linear_set:
         linear_set.pop(('__const__', -1))
     return linear_set
 
 
-def normalize_linear_set(linear_set: Dict[Tuple[str, int], ITeg]):
+def normalize_linear(linear: Dict[Tuple[str, int], ITeg]):
+    """Normalizes the coefficients vector of a linear expression. """
     normalization_var = Var('__norm__')
-    normalization_expr = Invert(Sqrt(reduce(operator.add, [Sqr(expr) for var, expr in linear_set.items()])))
-
-    normalized_set = {var: expr * normalization_var for var, expr in linear_set.items()}
+    normalization_expr = Invert(Sqrt(reduce(operator.add, [Sqr(expr) for var, expr in linear.items()])))
+    normalized_set = {var: expr * normalization_var for var, expr in linear.items()}
 
     return normalized_set, normalization_var, normalization_expr
 
 
-def negate_degenerate_coeffs(affine_set: Dict[Tuple[str, int], ITeg], source_vars: List[TegVar]):
-    """
-        If exprs[0] is negative, flip all coefficents so we don't run into
-        degenerate conditions. Since coeffcients are not known in advance, this
-        must be done using Teg instructions.
-    """
-    exprs = [affine_set[(s_var.name, s_var.uid)] for s_var in source_vars]
+def negate_degenerate_coeffs(affine: Dict[Tuple[str, int], ITeg], source_vars: List[TegVar]):
+    """Flips all the coefficients if expr[0] < 0 to avoid degeneracies"""
+    exprs = [affine[(s_var.name, s_var.uid)] for s_var in source_vars]
 
     flip_condition = exprs[0] < 0
 
-    robust_affine_set = dict([(var, IfElse(flip_condition, -coeff, coeff)) for (var, coeff) in affine_set.items()])
+    robust_affine_set = dict([(var, IfElse(flip_condition, -coeff, coeff)) for (var, coeff) in affine.items()])
 
     return robust_affine_set, flip_condition
 
 
-def rotate_to_target(linear_set: Dict[Tuple[str, int], ITeg],
-                     target_index: int,
-                     target_vars: List[TegVar],
-                     source_vars: List[TegVar]):
+def rotate_to_target(linear: Dict[Tuple[str, int], ITeg], source_vars: List[TegVar]) -> List[ITeg]:
+    """Generates the set of expressions for the rotated target variables.
 
+    See Appendix A for details.
+    """
+    rotation = []
     num_vars = len(source_vars)
-    exprs = [linear_set[(s_var.name, s_var.uid)] for s_var in source_vars]
+    exprs = [linear[(s_var.name, s_var.uid)] for s_var in source_vars]
+    for target_index in range(num_vars):
+        if target_index == 0:
+            rotation.append(sum(exprs[i] * source_vars[i] for i in range(num_vars)))
+        elif target_index < len(linear):
+            i = target_index
+            rotation_expr = sum(((Const(1) if i == j else Const(0))
+                                - (exprs[i] * exprs[j]) / (1 + exprs[0])) * source_vars[j]
+                                for j in range(1, num_vars))
+            rotation.append(-exprs[i] * source_vars[0] + rotation_expr)
+        else:
+            raise ValueError(f'Requested target coordinate index: {target_index} is out of bounds.')
 
-    if target_index == 0:
-        return sum(exprs[i] * source_vars[i] for i in range(num_vars))
-    elif target_index < len(linear_set):
-        i = target_index
-        rotation_expr = sum(((Const(1) if i == j else Const(0))
-                            - (exprs[i] * exprs[j]) / (1 + exprs[0])) * source_vars[j]
-                            for j in range(1, num_vars))
-        return -exprs[i] * source_vars[0] + rotation_expr
-    else:
-        raise ValueError(f'Requested target coordinate index: {target_index} is out of bounds.')
+    return rotation
 
 
-def var_list(linear_set: Dict[Tuple[str, int], ITeg]):
-    idnames = list(linear_set.keys())
+def var_list(linear: Dict[Tuple[str, int], ITeg]):
+    """Extracts the sorted variable names from a linear expression. """
+    idnames = list(linear.keys())
     idnames.sort(key=lambda a: a[1])
     return idnames
 
 
-def rotate_to_source(linear_set: Dict[Tuple[str, int], ITeg],
-                     source_index: int,
+def rotate_to_source(linear: Dict[Tuple[str, int], ITeg],
                      target_vars: List[TegVar],
-                     source_vars: List[TegVar]):
+                     source_vars: List[TegVar]) -> List[ITeg]:
+    """Generates the set of expressions for the source variables in terms of the rotated targets.
 
+    See Appendix A for details.
+    """
+    rotation = []
     num_vars = len(target_vars)
-    exprs = [linear_set[(s_var.name, s_var.uid)] for s_var in source_vars]
+    exprs = [linear[(s_var.name, s_var.uid)] for s_var in source_vars]
+    for source_index in range(num_vars):
+        if source_index == 0:
+            rotation.append(sum((Const(1) if i == 0 else Const(-1)) * exprs[i] * target_vars[i] for i in range(num_vars)))
+        elif source_index < len(linear):
+            i = source_index
+            inverse_rotation = sum(((Const(1) if i == j else Const(0))
+                                   - (exprs[i] * exprs[j]) / (1 + exprs[0])) * target_vars[j]
+                                   for j in range(1, num_vars))
+            rotation.append(inverse_rotation + exprs[i] * target_vars[0])
+        else:
+            raise ValueError(f'Requested source coordinate index: {source_index} is invalid.')
 
-    if source_index == 0:
-        return sum((Const(1) if i == 0 else Const(-1)) * exprs[i] * target_vars[i] for i in range(num_vars))
-    elif source_index < len(linear_set):
-        i = source_index
-        # TODO: Potential change here.. (not considering the top row)
-        inverse_rotation = sum(((Const(1) if i == j else Const(0))
-                               - (exprs[i] * exprs[j]) / (1 + exprs[0])) * target_vars[j]
-                               for j in range(1, num_vars))
-        return inverse_rotation + exprs[i] * target_vars[0]
-    else:
-        raise ValueError(f'Requested source coordinate index: {source_index} is invalid.')
+    return rotation
 
 
-def bounds_of(linear_set: Dict[Tuple[str, int], ITeg],
-              target_index: int,
-              target_vars: List[TegVar],
-              source_vars: List[TegVar]):
-    # Return bounds using placeholders.
-    # idnames = affine_set.keys()
-    # sorted_idnames = sort(idnames, key=lambda a:a[1])
-
+def bounds_of(linear: Dict[Tuple[str, int], ITeg], source_vars: List[TegVar]) -> List[ITeg]:
+    """Generates the bounds of integration after rotation (i.e., it's the bounds transfer function). """
+    lower_bounds, upper_bounds = [], []
     num_vars = len(source_vars)
-    exprs = [linear_set[(s_var.name, s_var.uid)] for s_var in source_vars]
+    exprs = [linear[(s_var.name, s_var.uid)] for s_var in source_vars]
+    for target_index in range(num_vars):
+        if target_index == 0:
+            lower = sum(exprs[i] * IfElse(exprs[i] > 0, source_vars[i].lower_bound(), source_vars[i].upper_bound())
+                        for i in range(num_vars))
+            upper = sum(exprs[i] * IfElse(exprs[i] > 0, source_vars[i].upper_bound(), source_vars[i].lower_bound())
+                        for i in range(num_vars))
+        elif target_index < len(linear):
+            def coeff(u, v):
+                if v == 0:
+                    return -exprs[u]
+                else:
+                    return ((Const(1) if u == v else Const(0)) - (exprs[u] * exprs[v]) / (Const(1) + exprs[0]))
 
-    if target_index == 0:
-        # raise ValueError('Bounds for target variable 0 are undefined.')
-        return sum(exprs[i] * IfElse(exprs[i] > 0, source_vars[i].lower_bound(), source_vars[i].upper_bound())
-                   for i in range(num_vars)),\
-               sum(exprs[i] * IfElse(exprs[i] > 0, source_vars[i].upper_bound(), source_vars[i].lower_bound())
-                   for i in range(num_vars))
-    elif target_index < len(linear_set):
-        def coeff(u, v):
-            if v == 0:
-                return -exprs[u]
-            else:
-                return ((Const(1) if u == v else Const(0)) -
-                        (exprs[u] * exprs[v]) / (Const(1) + exprs[0]))
+            i = target_index
+            lower = upper = Const(0)
+            for j in range(num_vars):
+                placeholder_lb = source_vars[j].lower_bound()
+                placeholder_ub = source_vars[j].upper_bound()
+                lower += coeff(i, j) * IfElse(coeff(i, j) > 0, placeholder_lb, placeholder_ub)
+                upper += coeff(i, j) * IfElse(coeff(i, j) > 0, placeholder_ub, placeholder_lb)
+        else:
+            raise ValueError(f'Requested target coordinate index: {target_index} is out of bounds.')
+        lower_bounds.append(lower)
+        upper_bounds.append(upper)
 
-        i = target_index
-        lower_bound = upper_bound = Const(0)
-        for j in range(num_vars):
-            placeholder_lb = source_vars[j].lower_bound()
-            placeholder_ub = source_vars[j].upper_bound()
-            lower_bound += coeff(i, j) * IfElse(coeff(i, j) > 0, placeholder_lb, placeholder_ub)
-            upper_bound += coeff(i, j) * IfElse(coeff(i, j) > 0, placeholder_ub, placeholder_lb)
-        return lower_bound, upper_bound
-    else:
-        raise ValueError(f'Requested target coordinate index: {target_index} is out of bounds.')
+    return lower_bounds, upper_bounds

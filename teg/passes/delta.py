@@ -314,10 +314,10 @@ def normalize_deltas(expr: Delta):
             else:
                 # while not is_delta_normal(e):
                 if not is_delta_normal(e):
-                    accepts = [handler.accept(e, set(ctx['upper_tegvars'])) for handler in HANDLERS]
-                    assert any(accepts), f'Cannot find any handler for delta expression {e}'
+                    can_rewrites = [handler.can_rewrite(e, set(ctx['upper_tegvars'])) for handler in HANDLERS]
+                    assert any(can_rewrites), f'Cannot find any handler for delta expression {e}'
 
-                    handler = HANDLERS[accepts.index(True)]
+                    handler = HANDLERS[can_rewrites.index(True)]
                     # print(f'Rewriting delta: {e} {ctx["upper_tegvars"]}, with handler {handler.__name__}')
                     e = handler.rewrite(e, set(ctx['upper_tegvars']))
                     # print(f'Rewritten delta: {e}')

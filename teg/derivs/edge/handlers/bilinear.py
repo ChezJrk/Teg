@@ -130,7 +130,7 @@ def teg_cases(exprs, conditions):
 
 class BilinearHandler(DeltaHandler):
 
-    def accept(delta, not_ctx=set()):
+    def can_rewrite(delta, not_ctx=set()):
         try:
             poly_list = extract_coefficients_from_polynomial(delta.expr, {(var.name, var.uid) for var in not_ctx})
             # print(poly_list.keys())
