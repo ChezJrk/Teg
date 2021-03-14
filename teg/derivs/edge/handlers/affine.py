@@ -48,7 +48,7 @@ class AffineHandler(DeltaHandler):
         not_ctx = set() if not_ctx is None else not_ctx
 
         # Canonicalize affine expression into a map {var: coeff}
-        raw_affine_set = extract_coefficients_from_affine(delta.expr, not_ctx)
+        raw_affine_set = extract_coefficients_from_affine(delta.expr, {(var.name, var.uid) for var in not_ctx})
 
         # Introduce a constant term if there isn't one
         if ('__const__', -1) not in raw_affine_set:
@@ -125,7 +125,6 @@ def combine_affine_sets(affine_lists: List[Dict[Tuple[str, int], ITeg]], op) -> 
 
 
 def is_expr_parametric(expr: ITeg, not_ctx: Set[Tuple[str, int]]) -> bool:
-    """Checks whether an expression contains a variable of integration. """
     if isinstance(expr, TegVar):
         return False if (expr.name, expr.uid) in not_ctx else True
     elif isinstance(expr, (Var, Const)):
@@ -142,7 +141,7 @@ def extract_coefficients_from_affine(expr: ITeg, not_ctx: Set[Union[Var, Tuple]]
     elif isinstance(expr, Add):
         children_coeffs = [extract_coefficients_from_affine(child, not_ctx) for child in expr.children]
         return combine_affine_sets(children_coeffs, op=operator.add)
-    elif isinstance(expr, TegVar) and expr in not_ctx:
+    elif isinstance(expr, TegVar) and (expr.name, expr.uid) in not_ctx:
         return {(expr.name, expr.uid): Const(1)}
     elif is_expr_parametric(expr, not_ctx):
         return {('__const__', -1): expr}
@@ -166,7 +165,7 @@ def remove_constant_coeff(affine: Dict[Tuple[str, int], ITeg]) -> Dict[Tuple[str
 def normalize_linear(linear: Dict[Tuple[str, int], ITeg]):
     """Normalizes the coefficients vector of a linear expression. """
     normalization_var = Var('__norm__')
-    normalization_expr = Invert(Sqrt(reduce(operator.add, [Sqr(expr) for var, expr in linear.items()])))
+    normalization_expr = Invert(Sqrt(reduce(operator.add, [Sqr(expr) for expr in linear.values()])))
     normalized_set = {var: expr * normalization_var for var, expr in linear.items()}
 
     return normalized_set, normalization_var, normalization_expr
@@ -178,7 +177,7 @@ def negate_degenerate_coeffs(affine: Dict[Tuple[str, int], ITeg], source_vars: L
 
     flip_condition = exprs[0] < 0
 
-    robust_affine_set = dict([(var, IfElse(flip_condition, -coeff, coeff)) for (var, coeff) in affine.items()])
+    robust_affine_set = {var: IfElse(flip_condition, -coeff, coeff) for (var, coeff) in affine.items()}
 
     return robust_affine_set, flip_condition
 
