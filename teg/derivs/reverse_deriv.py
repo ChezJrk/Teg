@@ -276,7 +276,6 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup = None,
         uids = [var_uid for var_name, var_uid in partial_deriv_map.keys()]
         new_vars = [Var(var_name) for var_name, var_uid in partial_deriv_map.keys()]
         new_vals = [*partial_deriv_map.values()]
-        # new_vals = [e for e in new_vals]
 
         if output_list is not None:
             # Return requested list of outputs.
@@ -289,11 +288,7 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup = None,
             sorted_list.sort(key=lambda a: a[0])
             _, new_vars, new_vals = list(zip(*sorted_list))
 
-        # print('Reverse-mode list order: ', ''.join([str(var) + ', ' for var in new_vars]))
-
         assert len(new_vals) > 0, 'There must be variables to compute derivatives. '
-        # out_expr = Tup(*new_vars) if len(new_vars) > 1 else new_vars[0]
-        # derivs = LetIn(Tup(*new_vars), Tup(*new_vals), out_expr)
         return new_vars, (Tup(*new_vals) if len(new_vars) > 1 else new_vals[0])
 
     if len(out_deriv_vals) == 1:

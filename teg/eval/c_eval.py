@@ -41,7 +41,7 @@ class C_EvalMode(EvalMode):
         if not os.path.exists(self.outfolder):
             os.mkdir(self.outfolder)
 
-        self.main_filename = self.outfolder + f'/main_{C_EvalMode._module_count_}.c'
+        self.main_filename = self.outfolder + f'/main_{C_EvalMode._module_count_}.cc'
         self.out_filename = self.outfolder + f'/tegout_{C_EvalMode._module_count_}.h'
         self.module_name = f'teg_jit_module_{C_EvalMode._module_count_}'
         self.module_filename = None

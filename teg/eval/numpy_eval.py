@@ -17,8 +17,6 @@ from teg import (
     SmoothFunc
 )
 
-# from teg.derivs import FwdDeriv, RevDeriv
-
 from .eval_mode import EvalMode
 
 

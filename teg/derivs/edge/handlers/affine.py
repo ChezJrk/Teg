@@ -14,22 +14,13 @@ from teg import (
     LetIn,
     TegVar,
 )
-
-from teg.math import (
-    Sqrt,
-    Sqr
-)
-
-from teg.lang.extended import (
-    BiMap,
-    Delta
-)
-
+from teg.math import Sqrt, Sqr
+from teg.lang.extended import BiMap, Delta
 from .handler import DeltaHandler
 
 
 class AffineHandler(DeltaHandler):
-    """Accounts for affine discontinuities"""
+    """Resolves affine discontinuities. """
 
     def can_rewrite(delta: Delta, not_ctx: Optional[Set] = None) -> bool:
         """Check if a given expression is affine. """
