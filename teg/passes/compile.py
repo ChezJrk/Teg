@@ -56,7 +56,6 @@ def to_ir(expr: ITeg) -> IR_Function:
     instr_list, out_symbol, free_symbols = _to_ir(expr, {})
     return IR_Function(instr_list, output=out_symbol,
                        inputs=make_unique(remove_literals(free_symbols.values())), label='main')
-# TODO: STOPPED HERE.
 
 
 def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], IR_Variable, Dict[str, IR_Symbol]):

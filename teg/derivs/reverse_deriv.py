@@ -64,7 +64,6 @@ def reverse_deriv_transform(expr: ITeg,
                             args: Dict[str, Any]) -> Iterable[Tuple[Tuple[str, int], ITeg]]:
 
     if isinstance(expr, TegVar):
-        # print({(v.name, v.uid) for v in extend_dependencies({expr}, deps)})
         if (((expr.name, expr.uid) not in not_ctx) or
             {(v.name, v.uid) for v in extend_dependencies({expr}, deps)} - not_ctx):
             yield ((f'd{expr.name}', expr.uid), out_deriv_vals)
@@ -108,7 +107,6 @@ def reverse_deriv_transform(expr: ITeg,
         yield from ((name_uid, out_deriv_vals * IfElse(expr.cond, Const(0), deriv_else))
                     for name_uid, deriv_else in derivs_else)
 
-        # print(not_ctx)
         if not args.get('ignore_deltas', False):
             for boolean in primitive_booleans_in(expr.cond, not_ctx, deps):
                 jump = substitute(expr, boolean, true) - substitute(expr, boolean, false)
@@ -199,24 +197,17 @@ def reverse_deriv_transform(expr: ITeg,
         dnew_vars, body_derivs = set(), {}
         new_deps = {}
         for var, e in zip(expr.targets, expr.target_exprs):
-            # print(not_ctx)
-            # print(var, e)
             if any(Var(name=ctx_name, uid=ctx_uid) in e for ctx_name, ctx_uid in not_ctx):
                 # Add dependent variables.
                 assert isinstance(var, TegVar), f'{var} is dependent on TegVar(s):'\
                                                 f'({[ctx_var for ctx_var in not_ctx if ctx_var in e]}).'\
                                                 f'{var} must also be declared as a TegVar and not a Var'
-                # print(not_ctx)
                 not_ctx = not_ctx | {(var.name, var.uid)}
-            # print(var)
-            if var not in expr.expr:
-                # print('Not in expression')
-                continue
-            new_deps[var] = extract_vars(e)
-            # print('In expression')
-            dname = f'd{var.name}'
-            dnew_vars.add((dname, var.uid))
-            body_derivs[(dname, var.uid)] = list(reverse_deriv_transform(e, Const(1), not_ctx, deps, args))
+            if var in expr.expr:
+                new_deps[var] = extract_vars(e)
+                dname = f'd{var.name}'
+                dnew_vars.add((dname, var.uid))
+                body_derivs[(dname, var.uid)] = list(reverse_deriv_transform(e, Const(1), not_ctx, deps, args))
 
         deps = {**deps, **new_deps}
         # Thread through derivatives of each subexpression
