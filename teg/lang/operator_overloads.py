@@ -66,7 +66,7 @@ class TegOverloads:
         exp = try_making_teg_const(exp)
         if exp.value == 0:
             return Const(1)
-        # TODO: this is naive linear, could be log. Also, should support more.
+        # NOTE: this is naive linear, could be log. Also, should support more.
         assert isinstance(exp.value, int) and exp.value > 0, "We only support positive integer powers."
         return self * self**(exp.value - 1)
 

@@ -24,7 +24,8 @@ from teg.derivs.edge.handlers import bilinear, affine, single_axis
 
 
 # In order of precedence..
-# TODO: Change that when possible.
+# NOTE: If discontinuity handlers aren't strict supersets, this must become an
+#       inheritance graph.
 HANDLERS = [
     single_axis.ConstantAxisHandler,
     affine.AffineHandler,
@@ -309,8 +310,6 @@ def reparameterize(bimap: BiMap, expr: ITeg):
     # find bimap and all superseding integrals
     # substitute for integrals, generate let exprs, multiply inv_jacobian
 
-    # TODO: Put bounds checks in there too.
-
     def inner_fn(e, ctx):
         if isinstance(e, Teg):
             return e, {'is_expr': bimap is e,
@@ -327,9 +326,6 @@ def reparameterize(bimap: BiMap, expr: ITeg):
 
     def outer_fn(e, ctx):
         if isinstance(e, BiMap) and (bimap is e):
-            # TODO: Temporary fix.
-            # assert all([k in ctx['upper_tegvars'] for k in e.sources]),\
-            #       f'Attempting to map non-Teg vars {e.sources}, {ctx["upper_tegvars"]}'
             if not all([k in ctx['upper_tegvars'] for k in e.sources]):
                 # BiMap is invalid, null everything.
                 print(f'WARNING: Attempting to map non-Teg vars {e.sources}, {ctx["upper_tegvars"]}')

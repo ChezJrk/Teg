@@ -3,6 +3,9 @@
     on Teg expression trees.
 """
 
+# TODO: Get rid of this file after removing references.
+assert False, f'Deprecated'
+
 from typing import Dict, Optional
 
 from teg import (

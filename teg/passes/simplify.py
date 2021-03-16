@@ -98,7 +98,6 @@ def simplify(expr: ITeg) -> ITeg:
 
         if isinstance(simple1, Mul) and isinstance(simple2, Mul):
             # Distribution.
-            # TODO: Account for second term to be t * '1'
             exprLL, exprLR = simple1.children
             exprRL, exprRR = simple2.children
 
@@ -196,10 +195,6 @@ def simplify(expr: ITeg) -> ITeg:
         return Tup(*(simplify(child) for child in expr))
 
     elif isinstance(expr, LetIn):
-        # TODO: TEMP
-        # if Var(name = "__norm__", uid = 26) in expr.new_vars or len(expr.new_vars) != 1:
-        #    return LetIn(expr.new_vars, Tup(*(simplify(e) for e in expr.new_exprs)), simplify(expr.expr))
-
         simplified_exprs = Tup(*(simplify(e) for e in expr.new_exprs))
         child_expr = simplify(expr.expr)
         vars_list = expr.new_vars
@@ -256,9 +251,6 @@ def simplify(expr: ITeg) -> ITeg:
             return left_expr
         if left_expr == false or right_expr == false:
             return false
-        if isinstance(left_expr, Const) and isinstance(right_expr, Const):
-            # TODO: simple1, simple2 are both undefined. Fix this!
-            return Const(evaluate(And(simple1, simple2)))
         return And(left_expr, right_expr)
 
     elif isinstance(expr, Or):
@@ -269,9 +261,6 @@ def simplify(expr: ITeg) -> ITeg:
             return left_expr
         if left_expr == true or right_expr == true:
             return true
-        if isinstance(left_expr, Const) and isinstance(right_expr, Const):
-            # TODO: simple1, simple2 are both undefined. Fix this!
-            return Const(evaluate(Or(simple1, simple2)))
         return Or(left_expr, right_expr)
 
     else:

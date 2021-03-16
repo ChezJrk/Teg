@@ -646,7 +646,6 @@ def to_c(ir_func, infer_types=True, **kwargs):
 
     all_funcs = sum(all_funcs, [])
 
-    # TODO: Change this default value to something dynamic.
     return (all_funcs + [(c_symbolstring(ir_func, name_ctx, **kwargs), func_code)],
             [(inp.label, inp.default, inp._teg_var if hasattr(inp, '_teg_var') else None)
              for inp in ir_func.inputs])
