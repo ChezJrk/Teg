@@ -3,7 +3,7 @@
     on Teg expression trees.
 """
 
-from typing import Dict
+from typing import Dict, Optional
 
 from teg import (
     ITeg,
@@ -22,21 +22,15 @@ from teg import (
     And,
     Or,
 )
-
-from teg.lang.markers import (
-    Placeholder,
-    TegRemap,
-)
-
+from teg.lang.markers import Placeholder, TegRemap
 from teg.passes.substitute import substitute
 
 
-def is_remappable(expr: ITeg):
+def is_remappable(expr: ITeg) -> Optional[ITeg]:
     return remap_gather(expr)[0] is not None
 
 
-def resolve_placeholders(expr: ITeg,
-                         map: Dict[str, ITeg]):
+def resolve_placeholders(expr: ITeg, map: Dict[str, ITeg]) -> ITeg:
     """ Substitute placeholders for their expressions """
     for key, p_expr in map.items():
         expr = substitute(expr, Placeholder(signature=key), p_expr)
@@ -44,7 +38,7 @@ def resolve_placeholders(expr: ITeg,
     return expr
 
 
-def remap(expr: ITeg):
+def remap(expr: ITeg) -> ITeg:
     """
         Performs a remap pass.
         Eliminates 'TegRemap' nodes by lifting the subtree to the top level
@@ -91,7 +85,9 @@ def remap(expr: ITeg):
     return expr
 
 
-def remap_gather(expr: ITeg):
+def remap_gather(expr: ITeg) -> ITeg:
+    # TODO: Refactor to return None, None, [] to the end
+
     if isinstance(expr, TegRemap):
         return expr, expr.expr, []
 
@@ -165,7 +161,7 @@ def remap_gather(expr: ITeg):
                     Invert(remapped_tree),
                     teg_list)
         else:
-            return (None, None, [])
+            return None, None, []
 
     elif isinstance(expr, Tup):
         for index, child in enumerate(expr.children):
@@ -211,5 +207,3 @@ def remap_gather(expr: ITeg):
         print(f"WARNING: Remap traversal doesn't support this type {type(expr)}")
         print(expr)
         return None, None, []
-
-    return None, None, []

@@ -1,29 +1,14 @@
 
 from teg import (
-    ITeg,
     Const,
     Var,
     TegVar,
     IfElse,
     Teg,
     Tup,
-    LetIn,
 )
-
-from teg.lang.extended import (
-    ITegExtended,
-    Delta,
-    BiMap
-)
-
-from teg.derivs import FwdDeriv, RevDeriv
-from teg.derivs.fwd_deriv import fwd_deriv
 from teg.derivs.reverse_deriv import reverse_deriv
-from teg.passes.simplify import simplify
 from teg.passes.reduce import reduce_to_base
-from teg.passes.delta import split_expr, split_exprs, split_instance
-from teg.eval import evaluate
-
 from teg.maps.transform import scale, translate
 from teg.maps.polar import polar_2d_map
 

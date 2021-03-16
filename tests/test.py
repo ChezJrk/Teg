@@ -1,10 +1,8 @@
 import unittest
 from unittest import TestCase
 import numpy as np
-import time
 
 from teg import (
-    ITeg,
     Const,
     Var,
     TegVar,
@@ -13,19 +11,18 @@ from teg import (
     Tup,
     LetIn,
 )
-
 from teg.lang.extended import (
-    ITegExtended,
     Delta,
     BiMap
 )
-
 from teg.math import (
-    Sqr, Sqrt,
-    Cos, Sin,
-    ATan2, ASin
+    Sqr,
+    Sqrt,
+    Cos,
+    Sin,
+    ATan2,
+    ASin
 )
-
 from teg.derivs import FwdDeriv, RevDeriv
 from teg.derivs.fwd_deriv import fwd_deriv
 from teg.derivs.reverse_deriv import reverse_deriv
@@ -33,7 +30,6 @@ from teg.passes.simplify import simplify
 from teg.passes.reduce import reduce_to_base
 from teg.passes.delta import split_expr, split_exprs, split_instance
 from teg.eval import evaluate
-
 from teg.maps.polar import polar_2d_map
 from teg.maps.transform import scale, translate
 from teg.maps.smoothstep import smoothstep
@@ -518,11 +514,8 @@ class VariableBranchConditionsTest(TestCase):
         # d/dt int_{x=0}^1 ((x<t=0.5) ? 1 : 0) + 2 * ((x<t=0.5) ? 0 : 1)
         fwd_dintegral = FwdDeriv(integral, [(t, 1)])
         self.assertAlmostEqual(evaluate(fwd_dintegral), -1, places=3)
-        return
 
         rev_dintegral = RevDeriv(integral, Tup(Const(1)))
-        # print('Simplified..')
-        # print(simplify(rev_dintegral.deriv_expr))
         self.assertAlmostEqual(evaluate(rev_dintegral), -1, places=3)
 
         t1 = Var('t1', 0.3)
@@ -640,7 +633,6 @@ class VariableBranchConditionsTest(TestCase):
         body = IfElse(x < y, zero, one)
         integral = Teg(zero, one, body, x)
         body = RevDeriv(integral, Tup(Const(1)))
-        # print((body.deriv_expr))
         double_integral = Teg(zero, one, body, y)
         self.assertAlmostEqual(evaluate(double_integral, num_samples=100), -1, places=3)
 
@@ -653,7 +645,6 @@ class VariableBranchConditionsTest(TestCase):
         integral = Teg(zero, one, y * body, y)
 
         deriv_integral = RevDeriv(integral, Tup(Const(1)))
-        # print(simplify(deriv_integral.deriv_expr))
         self.assertAlmostEqual(evaluate(deriv_integral), -0.5, places=3)
 
         deriv_integral = FwdDeriv(integral, [(t, 1)])
@@ -698,8 +689,6 @@ class VariableBranchConditionsTest(TestCase):
         fwd_dt = evaluate(simplify(FwdDeriv(integral, [(t, 1)])))
         fwd_dt1 = evaluate(simplify(FwdDeriv(integral, [(t1, 1)])))
         fwd_dt2 = evaluate(simplify(FwdDeriv(integral, [(t2, 1)])))
-        # print([fwd_dt, fwd_dt1, fwd_dt2])
-        # print([d_t, d_t1, d_t2])
         check_nested_lists(self, [fwd_dt, fwd_dt1, fwd_dt2],
                            [d_t, d_t1, d_t2], places=2)
 
@@ -806,7 +795,6 @@ class MovingBoundaryTest(TestCase):
         check_nested_lists(self, evaluate(deriv_integral), [0, 2], places=3)
 
         deriv_integral = FwdDeriv(integral, [(a, 1), (b, 0)])
-        # print(deriv_integral.deriv_expr)
         self.assertAlmostEqual(evaluate(deriv_integral), 0, places=3)
 
         deriv_integral = FwdDeriv(integral, [(a, 0), (b, 1)])
@@ -913,7 +901,6 @@ class AffineConditionsTest(TestCase):
         # self.assertAlmostEqual(evaluate(deriv_integral), -2)
 
         deriv_integral = FwdDeriv(integral, [(t, 1)])
-        # print("Simplified: ", simplify(deriv_integral.deriv_expr))
         self.assertAlmostEqual(evaluate(deriv_integral.deriv_expr), -2)
 
     def test_affine_condition_with_constants(self):
@@ -1083,7 +1070,6 @@ def compare_eval_methods(self, *args, **kwargs):
         assert len(numpy_output) == len(c_output), "Output lengths do not match"
         check_nested_lists(self, numpy_output, c_output, places=places)
     else:
-        # print(f'Checking {numpy_output} with {c_output}')
         self.assertAlmostEqual(numpy_output, c_output, places=places)
 
 
@@ -1256,7 +1242,6 @@ class DeltaTest(TestCase):
         x = TegVar('x')
         a, b = Var('a'), Var('b')
         integral = Teg(a, b, Delta(x), x)
-        # print(reduce_to_base(integral))
         self.assertAlmostEqual(evaluate(reduce_to_base(integral), {a: -1, b: 1}), 1)
         self.assertAlmostEqual(evaluate(reduce_to_base(integral), {a: 0.1, b: 1}), 0)
         self.assertAlmostEqual(evaluate(reduce_to_base(integral), {a: -1, b: -0.1}), 0)
@@ -1314,11 +1299,9 @@ class DeltaTest(TestCase):
                                    target_upper_bounds=[x.upper_bound() - t]), x)
 
         t_val, a_val, b_val = 0, -1, 1
-        # print(reduce_to_base(integral), (b_val**2 - a_val**2) / 2 - t_val * (b_val - a_val))
         self.assertAlmostEqual(evaluate(reduce_to_base(integral), {a: a_val, b: b_val, t: t_val}),
                                (b_val**2 - a_val**2) / 2 - t_val * (b_val - a_val), places=3)
         t_val, a_val, b_val = 2, -4, 2
-        # print(reduce_to_base(integral), (b_val**2 - a_val**2) / 2 - t_val * (b_val - a_val))
         self.assertAlmostEqual(evaluate(reduce_to_base(integral), {a: a_val, b: b_val, t: t_val}),
                                (b_val**2 - a_val**2) / 2 - t_val * (b_val - a_val), places=3)
 
@@ -1329,7 +1312,6 @@ class DeltaTest(TestCase):
         t = Var('t')
         integral = Teg(a, b, BiMap(Delta(x_), [x_], [x - t], [x], [x_ + t], inv_jacobian=Const(1),
                                    target_lower_bounds=[x.lower_bound() - t], target_upper_bounds=[x.upper_bound() - t]), x)
-        # print(reduce_to_base(integral))
         self.assertAlmostEqual(evaluate(reduce_to_base(integral), {a: -1, b: 1, t: 0}), 1)
         self.assertAlmostEqual(evaluate(reduce_to_base(integral), {a: -1, b: 1, t: 2}), 0)
 
@@ -1516,13 +1498,10 @@ class TransformationTests(TestCase):
                        )
 
         _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t1, t2])
-        # print(simplify(d_t_expr))
         fd_d_t1 = 1.0  # finite_difference(reduce_to_base(integral), t1, bindings={t1: 0, t2: 0})
         fd_d_t2 = 1.0  # finite_difference(reduce_to_base(integral), t2, bindings={t1: 0, t2: 0})
 
         d_t_expr = reduce_to_base(d_t_expr)
-        # print('d_t_expr')
-        # print(simplify(d_t_expr))
         check_nested_lists(self,
                            evaluate(d_t_expr, num_samples=1000, bindings={t1: 0, t2: 0}),
                            [fd_d_t1, fd_d_t2],
@@ -1578,16 +1557,12 @@ class TransformationTests(TestCase):
 
         bindings = {t1: 1, t2: 1, t3: 0, t4: 0}
         _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t1, t2, t3, t4])
-        # print(simplify(d_t_expr))
         fd_d_t1 = finite_difference(reduce_to_base(integral), t1, bindings=bindings)
         fd_d_t2 = finite_difference(reduce_to_base(integral), t2, bindings=bindings)
         fd_d_t3 = finite_difference(reduce_to_base(integral), t3, bindings=bindings)
         fd_d_t4 = finite_difference(reduce_to_base(integral), t4, bindings=bindings)
 
         d_t_expr = reduce_to_base(d_t_expr)
-        # print('d_t_expr')
-        # print(simplify(d_t_expr))
-        # print([fd_d_t1, fd_d_t2, fd_d_t3, fd_d_t4])
         check_nested_lists(self,
                            evaluate(d_t_expr, num_samples=1000, bindings=bindings),
                            [fd_d_t1, fd_d_t2, fd_d_t3, fd_d_t4],
@@ -1616,7 +1591,6 @@ class HyperbolicMapTests(TestCase):
         _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
         fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
         d_t_expr = reduce_to_base(d_t_expr)
-        # print('d_t: ', fd_d_t)
         self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000, bindings={t: 0.5}), fd_d_t, places=2)
 
         # Derivative of threshold with scaling
@@ -1688,7 +1662,6 @@ class HyperbolicMapTests(TestCase):
         fd_d_t4 = finite_difference(reduce_to_base(integral), t4, bindings=bindings)
 
         d_t_expr = reduce_to_base(d_t_expr)
-        # print([fd_d_t, fd_d_t1, fd_d_t2, fd_d_t3, fd_d_t4])
         check_nested_lists(self, evaluate(d_t_expr, num_samples=1000, bindings=bindings),
                            [fd_d_t, fd_d_t1, fd_d_t2, fd_d_t3, fd_d_t4], places=2)
 
@@ -1720,7 +1693,6 @@ class HyperbolicMapTests(TestCase):
         fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
         d_t_expr = reduce_to_base(d_t_expr)
         self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000), fd_d_t, places=2)
-        # print(fd_d_t)
 
     def test_hyperbolic_full_domain(self):
         x = TegVar('x')
@@ -1756,8 +1728,6 @@ class HyperbolicMapTests(TestCase):
         d_cxy_expr = reduce_to_base(d_cxy_expr)
         self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000, bindings={t: 0.5, c_xy: 2.0}), fd_d_t, places=2)
         self.assertAlmostEqual(evaluate(d_cxy_expr, num_samples=1000, bindings={t: 0.5, c_xy: 2.0}), fd_d_cxy, places=2)
-        # print(fd_d_t)
-        # print(fd_d_cxy)
 
     def test_non_centered_hyperbola(self):
         x = TegVar('x')
@@ -1774,7 +1744,6 @@ class HyperbolicMapTests(TestCase):
         _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
         fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
         d_t_expr = reduce_to_base(d_t_expr)
-        # print(fd_d_t)
         self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000), fd_d_t, places=2)
 
         # Derivative of threshold (mirrored axes).
@@ -1787,7 +1756,6 @@ class HyperbolicMapTests(TestCase):
         _, d_t_expr = reverse_deriv(integral, Tup(Const(1)), output_list=[t])
         fd_d_t = finite_difference(integral, t, bindings={t: 0.5})
         d_t_expr = reduce_to_base(d_t_expr)
-        # print(fd_d_t)
         self.assertAlmostEqual(evaluate(d_t_expr, num_samples=1000), fd_d_t, places=2)
 
     def test_parametric_hyperbola(self):

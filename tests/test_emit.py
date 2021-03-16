@@ -6,12 +6,9 @@ from integrable_program import (
     ITeg,
     Const,
     Var,
-    Add,
-    Mul,
     IfElse,
     Teg,
     Tup,
-    LetIn,
 )
 from derivs import FwdDeriv, RevDeriv
 import operator_overloads  # noqa: F401
@@ -30,7 +27,8 @@ def check_nested_lists(self, results, expected, places=7):
             assert isinstance(res, t) and isinstance(exp, t), err
             self.assertAlmostEqual(res, exp, places)
 
-def runProgram(program, silent = False):
+
+def runProgram(program, silent=False):
     prog_name, out_size = program
     proc = subprocess.Popen([prog_name], stdout=subprocess.PIPE, shell=True)
     (out, err) = proc.communicate()
@@ -43,6 +41,7 @@ def runProgram(program, silent = False):
         return [ float(line) for line in out.decode().split('\n')[:out_size] ]
     else:
         return float(out)
+
 
 def compileProgram(program):
     fn_name, arglist, code, out_size = (program.name, program.arglist, program.code, program.size)
@@ -67,7 +66,6 @@ def compileProgram(program):
                 f'  return 0;\n' + \
                 f'}}'
     
-
     # Include basic IO
     header_code = "#include <iostream>\n #include <math>\n"
 
@@ -85,10 +83,12 @@ def compileProgram(program):
 
     return "/tmp/_teg_cpp_out", out_size
 
-def evaluate(expr: ITeg, num_samples = 100, ignore_cache = False):
-    return runProgram(compileProgram(emit(expr, target = 'C', num_samples = num_samples)))
+
+def evaluate(expr: ITeg, num_samples=100, ignore_cache=False):
+    return runProgram(compileProgram(emit(expr, target='C', num_samples=num_samples)))
 
 # TODO: Move everything to test.py
+
 
 class TestArithmetic(TestCase):
 
@@ -96,7 +96,7 @@ class TestArithmetic(TestCase):
         x = Var('x', 1)
         three_x = x + x + x
         self.assertAlmostEqual(evaluate(three_x), 3, places=3)
-    
+
     def test_multiply(self):
         x = Var('x', 2)
         cube = x * x * x
@@ -132,6 +132,7 @@ class TestArithmetic(TestCase):
         x = Var('x', 2)
         poly = x * x * x + x * x + x
         self.assertAlmostEqual(evaluate(poly), 14, places=3)
+
 
 class TestConditionals(TestCase):
 
@@ -279,6 +280,7 @@ class TestNestedIntegrals(TestCase):
         integral = Teg(integral1, integral2, x, x)
         self.assertAlmostEqual(evaluate(integral), 0, places=3)
 
+
 class TestTups(TestCase):
 
     def test_tuple_basics(self):
@@ -312,6 +314,7 @@ class TestTups(TestCase):
         res = Teg(Const(0), Const(1), v * x, x)
         res, expected = evaluate(res), [0, .5, 1]
         check_nested_lists(self, res, expected)
+
 
 class VariableBranchConditionsTest(TestCase):
 
