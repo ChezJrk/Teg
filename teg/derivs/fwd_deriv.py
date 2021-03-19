@@ -200,7 +200,7 @@ def fwd_deriv_transform(expr: ITeg,
     return expr, ctx, not_ctx, deps
 
 
-def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, int]], replace_derivs=False) -> ITeg:
+def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, float]], replace_derivs=False) -> ITeg:
     """
     Computes the source-to-source forward of an expression.
 

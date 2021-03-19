@@ -53,12 +53,12 @@ def teg_smoothstep(x):
 def smoothstep(x):
     x_ = TegVar(f'{x.name}_sstep')
     inv_jacobian = (Cos(ASin(1 - 2 * x_)/3)/3) * (2/Sqrt(1 - Sqr(1 - 2 * x_)))
-    return partial(BiMap,
-                   targets=[x_],
-                   target_exprs=[teg_smoothstep(x)],
-                   sources=[x],
-                   source_exprs=[0.5 - Sin(ASin(1.0 - 2.0 * x_)/3.0)],
-                   inv_jacobian=inv_jacobian,
-                   target_upper_bounds=[teg_smoothstep(x.ub())],
-                   target_lower_bounds=[teg_smoothstep(x.lb())]),\
-           x_
+    return (partial(BiMap,
+                    targets=[x_],
+                    target_exprs=[teg_smoothstep(x)],
+                    sources=[x],
+                    source_exprs=[0.5 - Sin(ASin(1.0 - 2.0 * x_)/3.0)],
+                    inv_jacobian=inv_jacobian,
+                    target_upper_bounds=[teg_smoothstep(x.ub())],
+                    target_lower_bounds=[teg_smoothstep(x.lb())]),
+            x_)
