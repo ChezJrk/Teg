@@ -3,7 +3,12 @@
 Teg is a differentiable programming language that includes an integral primitive, which allows for soundly optimizing integrals with discontinuous integrands. This is a research artifact for the paper: **Systematically Optimizing Parametric Discontinuities**. It includes all of the code for the applications: **TODO**
 
 ## Installation Instructions
-Clone this repository and after running `cd Teg` to move to the root directory run `pip install -e .` to install the `teg` module locally. 
+Teg requires Python 3.6+. To install Teg run:
+```
+git clone https://github.com/ChezJrk/Teg.git
+cd Teg
+pip install -e .
+```
 
 ## Illustrative Example
 A minimal illustrative example is:
@@ -11,7 +16,7 @@ A minimal illustrative example is:
 ![\frac{d}{dt} \int_{x = 0}^1 [x > t]](https://latex.codecogs.com/svg.latex?\frac{d}{dt}%20\int_{x%20=%200}^1%20[x%20%3E%20t])
 
 This is the integral of a step discontinuity that jumps from 0 to 1 at ![](https://latex.codecogs.com/svg.latex?t).
-If we set ![](https://latex.codecogs.com/svg.latex?t%20=%200.5), then the result is 1, but discretizing before computing the derivative is standard in differentiable programming languages without an integral primitive will compute a derivative of 0 as it does not include the derivative contribution of the parametric discontinuity. The corresponding code snippet is:
+If we set ![](https://latex.codecogs.com/svg.latex?t%20=%200.5), then the result is 1, but discretizing before computing the derivative as is standard in differentiable programming languages (e.g., PyTorch and TensorFlow) results in a derivative of 0. Our language correctly models the interaction between the integral and the parametric discontinuity. In our language the implementation for this simple function is:
 ```python
 from teg import TegVar, Var, Teg, IfElse
 from teg.derivs import FwdDeriv
@@ -29,7 +34,7 @@ Our implementation is in the `teg` folder:
  - `eval` and `include` have all of the code for evaluating expressions either by interpreting locally in Python or compiling to C.
  - `ir` includes an intermediate representation useful in compiling code down to C.
  - `lang` includes the main language primitives with the base language in `base.py` and `teg.py` and the extended language (that has the Dirac delta function) is in `extended.py`.
- - `maps` and `math` specifies basic math libraries that are useful in our implementation.
+ - `maps` and `math` specifies basic math libraries.
  - `passes` includes source-to-source compilation passes. Notably, `reduce.py` has the lowering code from the external language to the internal language.
 
 We have a `test` folder with all of the systems tests.
