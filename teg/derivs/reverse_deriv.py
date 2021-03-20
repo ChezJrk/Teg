@@ -65,7 +65,7 @@ def reverse_deriv_transform(expr: ITeg,
 
     if isinstance(expr, TegVar):
         if (((expr.name, expr.uid) not in not_ctx) or
-            {(v.name, v.uid) for v in extend_dependencies({expr}, deps)} - not_ctx):
+                {(v.name, v.uid) for v in extend_dependencies({expr}, deps)} - not_ctx):
             yield ((f'd{expr.name}', expr.uid), out_deriv_vals)
 
     elif isinstance(expr, (Const, Delta)):
@@ -128,25 +128,6 @@ def reverse_deriv_transform(expr: ITeg,
                         for name_uid, lower_deriv in lower_derivs)
 
         not_ctx.add((expr.dvar.name, expr.dvar.uid))
-
-        """
-        delta_set = rotated_delta_contribution(expr, not_ctx, deps | {(expr.dvar, expr.lower, expr.upper)})
-
-        for delta in delta_set:
-            delta_expr, distance_to_delta, remapping = delta
-            deriv_dist_to_delta = reverse_deriv_transform(distance_to_delta, Const(1), not_ctx, deps)
-            delta_deriv_parts = [(name_uid, deriv_expr) for name_uid, deriv_expr in deriv_dist_to_delta]
-
-            delta_deriv_dict = {}
-            for i in delta_deriv_parts:
-                delta_deriv_dict.setdefault(i[0], []).append(i[1])
-
-            delta_deriv_list = []
-            for (uid, exprs) in delta_deriv_dict.items():
-                delta_deriv_list.append((uid, remapping(delta_expr * out_deriv_vals * reduce(operator.add, exprs))))
-
-            yield from delta_deriv_list
-        """
 
         deriv_body_traces = reverse_deriv_transform(expr.body,
                                                     Const(1),
@@ -228,21 +209,17 @@ def reverse_deriv_transform(expr: ITeg,
 
 
 def reverse_deriv(expr: ITeg, out_deriv_vals: Tup = None,
-                  output_list: Optional[List[Var]] = None, args: Dict[str, Any] = None) -> ITeg:
+                  output_list: Optional[List[Var]] = None,
+                  args: Dict[str, Any] = None) -> ITeg:
     """Computes the derivative of a given expression.
 
     Args:
         expr: The expression to compute the total derivative of.
         out_deriv_vals: A mapping from variable names to the values of corresponding infinitesimals.
+        args: Additional mappings for specifying alternative behavior such as 'ignore_deltas' and 'ignore_bounds'.
 
     Returns:
-        Teg: The reverse derivative expression.
-    """
-    """
-    def remap_all(expr: ITeg):
-        while is_remappable(expr):
-            expr = remap(expr)
-        return expr
+        ITeg: The reverse derivative expression in the extended language.
     """
 
     if out_deriv_vals is None:

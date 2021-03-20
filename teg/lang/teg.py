@@ -1,4 +1,5 @@
 from typing import Optional
+
 from .base import Var, ITeg, try_making_teg_const
 from .markers import Placeholder
 

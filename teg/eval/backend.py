@@ -10,14 +10,26 @@ BACKENDS = {
 }
 
 
-def evaluate(expr: ITeg, bindings={}, backend=None, **kwargs):
+def evaluate(expr: ITeg, bindings=None, backend=None, **kwargs) -> float:
+    """Evaluates expressions with any of various backgrounds.
+
+    Args:
+        expr: An expression to be evaluated.
+        bindings: A mapping from variable names to the values.
+        backend: The supported backends are 'C', 'C_PyBind, 'numpy'.
+        kwargs: Extra flags to be passed to the backend.
+
+    Returns:
+        Teg: The forward fwd_derivative expression.
+    """
+
     if not hasattr(expr, 'mode_cache'):
         setattr(expr, 'mode_cache', {})
         setattr(expr, 'mode_options', kwargs)
 
+    bindings = {} if bindings is None else bindings
     # NOTE: Replace with priorities if we use more modes later..
-    if backend is None:
-        backend = 'C'
+    backend = 'C' if backend is None else backend
 
     if backend not in expr.mode_cache.keys() or\
        not all([(key, value) in expr.mode_options.items() for key, value in kwargs.items()]):

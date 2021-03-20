@@ -56,11 +56,7 @@ def split_expr(expr: ITeg, t_expr: ITeg):
 
 
 def split_exprs(exprs: List[ITeg], t_expr: ITeg):
-    """
-    Given a list of expressions exprs in a tree t_expr, find the normalized expression tree
-    n_expr such that t_expr = (let exprs = 0 in t_expr) + n_expr
-    (expr is linear in t_expr)
-    """
+    """Given a list of expressions exprs in a tree t_expr, find the normalized expression tree. """
 
     def inner_fn(e, ctx):
         ctx = {'expr': e, 'is_expr': e in exprs}
@@ -128,11 +124,6 @@ def split_exprs(exprs: List[ITeg], t_expr: ITeg):
 
 
 def split_instance(expr: ITeg, t_expr: ITeg):
-    """
-    Given a specific expression instance expr in a tree t_expr, find the normalized expression tree
-    n_expr such that t_expr = (let_instance expr = 0 in t_expr) + n_expr
-    (expr is linear in t_expr)
-    """
 
     def inner_fn(e, ctx):
         ctx = {'expr': e, 'is_expr': expr is e}
@@ -210,11 +201,6 @@ def split_instance(expr: ITeg, t_expr: ITeg):
 
 
 def is_expr_linear_in_tree(expr: ITeg, t_expr: ITeg):
-    """
-    Given an expression expr in a tree t_expr, find the normalized expression tree
-    n_expr such that t_expr = (let expr = 0 in t_expr) + n_expr
-    (expr is linear in t_expr)
-    """
     def inner_fn(e, ctx):
         return e, {'expr': e, 'is_expr': expr is e, **ctx}
 
@@ -272,18 +258,14 @@ def normalize_deltas(expr: Delta):
                    f'is/are dependent on one or more of {ctx["upper_tegvars"]} '\
                    f'through one-way let expressions. Use bijective maps (BiMap) instead'
             if (not any([k in ctx['upper_tegvars'] for k in ctx['lower_tegvars']])) or (not ctx['lower_tegvars']):
-                # print(f'Not rewriting delta: {e} {ctx["upper_tegvars"]} {ctx["lower_tegvars"]}')
                 return Const(0), ctx
             else:
-                # while not is_delta_normal(e):
                 if not is_delta_normal(e):
                     can_rewrites = [handler.can_rewrite(e, set(ctx['upper_tegvars'])) for handler in HANDLERS]
                     assert any(can_rewrites), f'Cannot find any handler for delta expression {e}'
 
                     handler = HANDLERS[can_rewrites.index(True)]
-                    # print(f'Rewriting delta: {e} {ctx["upper_tegvars"]}, with handler {handler.__name__}')
                     e = handler.rewrite(e, set(ctx['upper_tegvars']))
-                    # print(f'Rewritten delta: {e}')
                     e = normalize_deltas(e)  # Normalize further if necessary
 
                 return e, ctx
@@ -371,7 +353,6 @@ def reparameterize(bimap: BiMap, expr: ITeg):
 
                     # Add dependent mappings here.
                     for new_vars, new_exprs in ctx.get('dependent_mappings', []):
-                        # print(f'ADDING DEPENDENT MAPPING FOR: {new_vars}')
                         e = LetIn(new_vars, new_exprs, e)
                 return e, ctx
 

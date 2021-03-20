@@ -1,45 +1,25 @@
-from typing import List, Tuple, Dict
+from typing import Dict
+from functools import reduce
+import operator
+
 from teg import (
     ITeg,
     Const,
     Var,
     TegVar,
-    SmoothFunc,
-    Add,
-    Mul,
-    Invert,
     IfElse,
-    Teg,
-    Tup,
     LetIn,
-    Bool,
-    And,
-    Or
 )
-
-from teg.lang.extended import (
-    ITegExtended,
-    BiMap,
-    Delta
-)
-
-from teg.lang.markers import (
-    Placeholder
-)
-
-
-from teg.passes.base import base_pass
+from teg.lang.extended import ITegExtended, BiMap, Delta
+from teg.lang.markers import Placeholder
 from teg.passes.substitute import substitute
 from teg.derivs import fwd_deriv
-from functools import reduce
-import operator
+
 
 def is_base_language(expr: ITeg):
-    """
-        Checks if the tree has any elements from
-        the extended language.
-        Trees cannot be evaluated in the extended language and
-        must first be reduced to the base language.
+    """Checks if the tree has any elements from the extended language.
+
+    Trees cannot be evaluated in the extended language and must first be reduced to the base language.
     """
     if isinstance(expr, ITegExtended):
         return False
@@ -50,9 +30,7 @@ def is_base_language(expr: ITeg):
 
 
 def contains_delta(expr: ITeg):
-    """
-
-    """
+    """Checks if an expression contains a Dirac delta"""
     if isinstance(expr, Delta):
         return True
     elif hasattr(expr, 'children'):
@@ -62,9 +40,7 @@ def contains_delta(expr: ITeg):
 
 
 def is_delta_normal(expr: Delta):
-    """
-
-    """
+    """Check is if the expression in a Dirac delta function is just a variable."""
     if isinstance(expr.expr, TegVar):
         return True
     else:
@@ -72,10 +48,9 @@ def is_delta_normal(expr: Delta):
 
 
 def is_bimap_trivial(expr: BiMap):
-    """
-        Checks if the BiMap has no Delta element in its body.
-        A BiMap without any delta elements can be converted into a 
-        LetIn expression without any consequence.
+    """Checks if the BiMap has no Delta element in its body.
+
+    A BiMap without any delta elements can be converted into a LetIn expression without any consequence.
     """
     return not contains_delta(expr.expr)
 
@@ -93,10 +68,8 @@ def top_level_instance_of(expr: ITeg, fn):
 
 
 def transfer_bounds_deriv_mode(expr: BiMap, source_lower: Dict[TegVar, ITeg], source_upper: Dict[TegVar, ITeg]):
-    """
-    Implements a derivative-based pessimistic bounds computation for
-    continuous monotonic maps.
-    """
+    """Implements a derivative-based pessimistic bounds computation for
+    continuous monotonic maps. """
     lb_lets = {}
     ub_lets = {}
 
@@ -109,10 +82,8 @@ def transfer_bounds_deriv_mode(expr: BiMap, source_lower: Dict[TegVar, ITeg], so
 
 
 def transfer_bounds_general(expr: BiMap, source_lower: Dict[TegVar, ITeg], source_upper: Dict[TegVar, ITeg]):
-    """
-    Implements a derivative-based pessimistic bounds computation for
-    continuous monotonic maps.
-    """
+    """Implements a derivative-based pessimistic bounds computation for
+    continuous monotonic maps. """
     lb_lets = {}
     ub_lets = {}
 
@@ -126,7 +97,7 @@ def transfer_bounds_general(expr: BiMap, source_lower: Dict[TegVar, ITeg], sourc
 
 def resolve_placeholders(expr: ITeg,
                          map: Dict[str, ITeg]):
-    """ Substitute placeholders for their expressions """
+    """Substitute placeholders for their expressions. """
     for key, p_expr in map.items():
         expr = substitute(expr, Placeholder(signature=key), p_expr)
 
@@ -144,23 +115,3 @@ def extract_vars(expr: ITeg):
         return reduce(operator.or_, [extract_vars(child) for child in expr.children], set())
     else:
         return set()
-
-
-"""
-def top_level_instance_of(expr: ITeg, fn: Func):
-    def inner_fn(e: ITeg, ctx):
-        if ctx['bimap'] is None and isinstance(e, BiMap):
-            return e, {'bimap': e}
-        else:
-            return e, ctx
-
-    def outer_fn(e: ITeg, ctx):
-        return e, ctx
-
-    def context_combine(ctxs):
-        ctxs = reduce(lambda a, b: {**a, **b}, ctxs)
-        return ctxs
-
-    expr, context = base_pass(expr, {'bimap': None}, inner_fn, outer_fn, context_combine)
-    return context['bimap']
-"""

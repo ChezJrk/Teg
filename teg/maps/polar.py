@@ -42,12 +42,11 @@ def polar_2d_map(expr, x, y, r):
     distance_to_origin = Sqrt(Sqr((y.lb() + y.ub()) / 2) + Sqr((x.lb() + x.ub()) / 2))
     box_radius = Sqrt(Sqr((y.ub() - y.lb()) / 2) + Sqr((x.ub() - x.lb()) / 2))
 
-    """
-        Manual interval arithmetic for conservative polar bounds.
-        (These are not strictly necessary.
-         Using (0,2pi) still produces the correct unbiased integrals. However,
-         they will have terrible sample behaviour)
-    """
+    # Manual interval arithmetic for conservative polar bounds.
+    # These are not strictly necessary.
+    # Using (0,2pi) still produces the correct unbiased integrals.
+    # However, they will have terrible sample behaviour)
+
     box_upper_right = ATan2(Tup(x.ub(), y.ub()))
     box_lower_right = ATan2(Tup(x.ub(), y.lb()))
     box_upper_left = ATan2(Tup(x.lb(), y.ub()))

@@ -162,20 +162,9 @@ def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> Tuple[List[IR_Instructi
             expr_vars.append(expr_var)
 
         new_symbols = {f'{var.name}_{var.uid}': symbol for var, symbol in zip(expr.new_vars, expr_vars)}
-                       # if not isinstance(symbol, IR_Literal)}
         ctx_symbols = {**symbols, **expr_free_symbols, **new_symbols}
 
         body_list, body_var, body_symbols = _to_ir(expr.expr, ctx_symbols)
-
-        # print(expr.new_vars)
-        # print(body_symbols.values())
-        # print(new_symbols.values())
-        """
-        for var, symbol in zip(expr.new_vars, expr_vars):
-            var_string = f'{var.name}_{var.uid}'
-            if isinstance(symbol, IR_Literal) and var_string in ctx_symbols.keys():
-                body_list = [IR_Assign(ctx_symbols[var_string], symbol), *body_list]
-        """
 
         body_fn = IR_Function(body_list, output=body_var,
                               inputs=make_unique(remove_literals(body_symbols.values())),

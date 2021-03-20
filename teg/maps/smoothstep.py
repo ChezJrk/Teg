@@ -1,23 +1,8 @@
-from typing import Tuple
-from teg import (
-    ITeg,
-    TegVar,
-    Const,
-    IfElse,
-    Invert
-)
+from functools import partial
 
-from teg.lang.extended import (
-    BiMap
-)
-
-from teg.math import (
-    Cos, Sin, Sqr, ASin, Sqrt
-)
-
-
-from functools import partial, reduce
-import operator
+from teg import TegVar, Const, IfElse
+from teg.lang.extended import BiMap
+from teg.math import Cos, Sin, Sqr, ASin, Sqrt
 
 
 def teg_max(a, b):

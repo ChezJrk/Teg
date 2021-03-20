@@ -16,22 +16,9 @@ from .base import (
     And,
     Or,
 )
-
-from .markers import (
-    Placeholder,
-    # TegRemap
-)
-
-from .teg import (
-    Teg,
-    TegVar
-)
-
-from .extended import (
-    BiMap,
-    Delta
-)
-
+from .markers import Placeholder
+from .teg import Teg, TegVar
+from .extended import BiMap, Delta
 from teg.utils import overloads
 
 
@@ -152,20 +139,6 @@ class TegTegVariableOverloads:
                    uid=self.uid)
         e.__setattr__('value', self.value)
         return e
-
-
-'''
-@overloads(TegRemap)
-class TegRemapOverloads:
-
-    def __str__(self):
-        mapping = "".join([f"{key} -> {value}" for key, value in self.exprs.items()])
-        return f"TegRemap[{mapping}]({self.expr})"
-
-    def __repr__(self):
-        value = '' if self.value is None else f', value={self.value}'
-        return f'TegVar(name={self.name}{value}, uid={self.uid})'
-'''
 
 
 @overloads(Placeholder)

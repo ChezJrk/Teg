@@ -210,7 +210,7 @@ def fwd_deriv(expr: ITeg, bindings: List[Tuple[ITeg, float]], replace_derivs=Fal
         replace_derivs: If true, assign derivatives to values specified by bindings.
 
     Returns:
-        Teg: The forward fwd_derivative expression.
+        ITeg: The forward derivative expression in the extended language.
     """
     binding_map = {(var.name, var.uid): val for var, val in bindings}
     if not replace_derivs:
