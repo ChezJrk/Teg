@@ -1,4 +1,5 @@
 from typing import Tuple, Dict
+
 from teg import (
     ITeg,
     Const,
@@ -8,7 +9,7 @@ from teg import (
     Invert,
     IfElse,
     Teg,
-    Tup,    
+    Tup,
     LetIn,
     Placeholder,
     SmoothFunc,
@@ -17,11 +18,7 @@ from teg import (
     And,
     Or
 )
-
-from teg.lang.extended import (
-    BiMap,
-    Delta
-)
+from teg.lang.extended import BiMap, Delta
 
 
 def base_pass(expr: ITeg, context, inner_fn, outer_fn, context_combine) -> Tuple[ITeg, Dict]:
@@ -150,13 +147,13 @@ def do_pass(expr: ITeg, context, inner_fn, outer_fn, context_combine) -> Tuple[I
                              zip(target_lower_bounds, expr.target_lower_bounds)]) and
                         body_expr is expr.expr and
                         jacobian_expr is expr.inv_jacobian) else BiMap(body_expr,
-                                                                        expr.targets,
-                                                                        target_exprs,
-                                                                        expr.sources,
-                                                                        source_exprs,
-                                                                        jacobian_expr,
-                                                                        target_upper_bounds,
-                                                                        target_lower_bounds)
+                                                                       expr.targets,
+                                                                       target_exprs,
+                                                                       expr.sources,
+                                                                       source_exprs,
+                                                                       jacobian_expr,
+                                                                       target_upper_bounds,
+                                                                       target_lower_bounds)
 
         return outer_fn(expr, context_combine([*source_contexts, *target_contexts,
                                                jacobian_context,

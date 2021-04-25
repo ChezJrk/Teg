@@ -27,7 +27,6 @@ class C_EvalMode(EvalMode):
         super(C_EvalMode, self).__init__(name='C')
 
         self.ir_func = to_ir(expr)
-        # print(expr)
         convert_output_to_target(self.ir_func, 'native')  # Ensure output type is generic_array<float, N>
 
         self.options = {'num_samples': num_samples, 'float_width': 'float'}
@@ -41,7 +40,7 @@ class C_EvalMode(EvalMode):
         if not os.path.exists(self.outfolder):
             os.mkdir(self.outfolder)
 
-        self.main_filename = self.outfolder + f'/main_{C_EvalMode._module_count_}.c'
+        self.main_filename = self.outfolder + f'/main_{C_EvalMode._module_count_}.cc'
         self.out_filename = self.outfolder + f'/tegout_{C_EvalMode._module_count_}.h'
         self.module_name = f'teg_jit_module_{C_EvalMode._module_count_}'
         self.module_filename = None
@@ -117,7 +116,7 @@ class C_EvalMode(EvalMode):
 
         self.module_filename = f'{self.outfolder}/{self.module_name}'
 
-        compile_command = f"g++ -O3 -std=c++11 -fPIC {teg_runtime_includes} "\
+        compile_command = f"g -O3 -std=c++11 -fPIC {teg_runtime_includes} "\
                           f"{self.main_filename} -o {self.module_filename}"
         proc = subprocess.Popen(compile_command,
                                 stdout=subprocess.PIPE, shell=True)
@@ -234,7 +233,7 @@ class C_EvalMode_PyBind(EvalMode):
 
         self.module_filename = f'{self.outfolder}/{self.module_name}{extension_suffix}'
 
-        compile_command = f"g++ -O3 -shared -std=c++11 -fPIC {pybind_includes} {teg_runtime_includes} "\
+        compile_command = f"g -O3 -shared -std=c++11 -fPIC {pybind_includes} {teg_runtime_includes} "\
                           f"{self.pybind_filename} -o {self.module_filename}"
         proc = subprocess.Popen(compile_command,
                                 stdout=subprocess.PIPE, shell=True)

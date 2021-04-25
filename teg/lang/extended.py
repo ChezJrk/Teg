@@ -1,8 +1,6 @@
 from typing import Tuple
-from .base import (
-    ITeg,
-    Var
-)
+
+from .base import ITeg, Var
 
 
 class ITegExtended(ITeg):
@@ -38,8 +36,7 @@ class BiMap(ITegExtended):
 
 class Delta(ITegExtended):
 
-    def __init__(self,
-                 expr: ITeg):
+    def __init__(self, expr: ITeg):
         super(Delta, self).__init__(children=[expr])
 
         self.expr = expr

@@ -1,43 +1,31 @@
 # Delta and BiMap elimination passes
 from functools import reduce
 from typing import List
+import operator
+from copy import copy
+
 from teg.passes.base import base_pass
-from teg.passes.substitute import substitute, substitute_instance
-from teg.passes.simplify import simplify
+from teg.passes.substitute import substitute_instance
 from teg import (
     ITeg,
     Add,
     SmoothFunc,
     Teg,
     TegVar,
-    Const,
     LetIn,
     IfElse,
     Tup,
     Var,
     Const
 )
+from teg.lang.extended import Delta, BiMap
+from teg.lang.extended_utils import top_level_instance_of, is_delta_normal, resolve_placeholders
+from teg.derivs.edge.handlers import bilinear, affine, single_axis
 
-from teg.lang.extended import (
-    Delta, BiMap
-)
-from teg.lang.extended_utils import (
-    top_level_instance_of,
-    is_delta_normal,
-    resolve_placeholders
-)
-
-from teg.derivs.edge.handlers import (
-    bilinear,
-    affine,
-    single_axis
-)
-
-import operator
-from copy import copy
 
 # In order of precedence..
-# TODO: Change that when possible.
+# NOTE: If discontinuity handlers aren't strict supersets, this must become an
+#       inheritance graph.
 HANDLERS = [
     single_axis.ConstantAxisHandler,
     affine.AffineHandler,
@@ -68,15 +56,7 @@ def split_expr(expr: ITeg, t_expr: ITeg):
 
 
 def split_exprs(exprs: List[ITeg], t_expr: ITeg):
-    """
-    Given a list of expressions exprs in a tree t_expr, find the normalized expression tree
-    n_expr such that t_expr = (let exprs = 0 in t_expr) + n_expr
-    (expr is linear in t_expr)
-    """
-    # print(expr)
-    # print('\n\n')
-    # print(t_expr)
-    # print('\n\n')
+    """Given a list of expressions exprs in a tree t_expr, find the normalized expression tree. """
 
     def inner_fn(e, ctx):
         ctx = {'expr': e, 'is_expr': e in exprs}
@@ -85,10 +65,6 @@ def split_exprs(exprs: List[ITeg], t_expr: ITeg):
         return e, ctx
 
     def outer_fn(e, ctx):
-        # if isinstance(e, Var):
-        # Duplicate leaf nodes to force the tree to be 
-        # freshly constructed. (Prevents duplicate nodes)
-        # e = copy(e)
 
         ctx['has_expr'] = any(ctx['has_exprs'])
         # Check if we need to handle other such cases.
@@ -96,8 +72,6 @@ def split_exprs(exprs: List[ITeg], t_expr: ITeg):
                f'expr is contained in a non-linear function {type(e)}'
         if isinstance(e, Add):
             if ctx['has_expr']:
-                # print('FOUND ADD. Taking branch')
-                # print(ctx['has_exprs'])
                 ctx['expr'] = sum([child for child, has_expr in zip(ctx['exprs'], ctx['has_exprs']) if has_expr])
                 return ctx['expr'], ctx
             else:
@@ -105,7 +79,6 @@ def split_exprs(exprs: List[ITeg], t_expr: ITeg):
                 return e, ctx
         elif isinstance(e, Tup):
             if ctx['has_expr']:
-                # assert sum(ctx['has_exprs']) == 1, f'More than one branch with expr'
                 ctx['expr'] = Tup(*[ctx['exprs'][idx] if has_expr else Const(0)
                                     for idx, has_expr in enumerate(ctx['has_exprs'])])
                 return ctx['expr'], ctx
@@ -120,10 +93,7 @@ def split_exprs(exprs: List[ITeg], t_expr: ITeg):
                 # Let expressions contain exprs.
                 new_exprs = [let_var for let_var, has_expr in zip(e.new_vars, ctx['has_exprs'][1:]) if has_expr]
                 # Recursively split the body with the new expressions.
-                # print('Recursing on: ', new_exprs, ' ', ctx['has_exprs'], ' ON ', ctx['let_body'])
                 s_expr = split_exprs(new_exprs, ctx['let_body'])
-                # print(f'GOT: {s_expr}')
-                # print(f'EXIST: {e.expr}')
                 let_body = (s_expr if s_expr else Const(0)) +\
                            (e.expr if ctx['has_exprs'][0] else Const(0))
                 try:
@@ -136,7 +106,6 @@ def split_exprs(exprs: List[ITeg], t_expr: ITeg):
 
                 return ctx['expr'], ctx
 
-        # print('AT:', e, ' HAS_EXPRS: ', ctx['has_exprs'], 'IS_EXPR: ', ctx.get('is_expr', False))
         ctx['expr'] = e
         return ctx['expr'], ctx
 
@@ -155,15 +124,6 @@ def split_exprs(exprs: List[ITeg], t_expr: ITeg):
 
 
 def split_instance(expr: ITeg, t_expr: ITeg):
-    """
-    Given a specific expression instance expr in a tree t_expr, find the normalized expression tree
-    n_expr such that t_expr = (let_instance expr = 0 in t_expr) + n_expr
-    (expr is linear in t_expr)
-    """
-    # print(expr)
-    # print('\n\n')
-    # print(t_expr)
-    # print('\n\n')
 
     def inner_fn(e, ctx):
         ctx = {'expr': e, 'is_expr': expr is e}
@@ -172,10 +132,6 @@ def split_instance(expr: ITeg, t_expr: ITeg):
         return e, ctx
 
     def outer_fn(e, ctx):
-        # if isinstance(e, Var):
-        # Duplicate leaf nodes to force the tree to be
-        # freshly constructed. (Prevents duplicate nodes)
-        # e = copy(e)
 
         ctx['has_expr'] = any(ctx['has_exprs'])
         # Check if we need to handle other such cases.
@@ -183,8 +139,6 @@ def split_instance(expr: ITeg, t_expr: ITeg):
                f'expr is contained in a non-linear function {type(e)}'
         if isinstance(e, Add):
             if ctx['has_expr']:
-                # print('FOUND ADD. Taking branch')
-                # print(ctx['has_exprs'])
                 assert sum(ctx['has_exprs']) == 1, 'More than one branch with expr'
                 ctx['expr'] = ctx['exprs'][ctx['has_exprs'].index(True)]
                 return ctx['expr'], ctx
@@ -247,11 +201,6 @@ def split_instance(expr: ITeg, t_expr: ITeg):
 
 
 def is_expr_linear_in_tree(expr: ITeg, t_expr: ITeg):
-    """
-    Given an expression expr in a tree t_expr, find the normalized expression tree
-    n_expr such that t_expr = (let expr = 0 in t_expr) + n_expr
-    (expr is linear in t_expr)
-    """
     def inner_fn(e, ctx):
         return e, {'expr': e, 'is_expr': expr is e, **ctx}
 
@@ -270,7 +219,7 @@ def is_expr_linear_in_tree(expr: ITeg, t_expr: ITeg):
                 'has_exprs': [ctx.get('has_expr', False) or ctx.get('is_expr', False) for ctx in contexts],
                 'is_linears': [ctx.get('is_linear', True) for ctx in contexts]}
 
-    n_expr, context = base_pass(expr, {}, inner_fn, outer_fn, context_combine)
+    _, context = base_pass(expr, {}, inner_fn, outer_fn, context_combine)
     return context['is_linear']
 
 
@@ -309,18 +258,14 @@ def normalize_deltas(expr: Delta):
                    f'is/are dependent on one or more of {ctx["upper_tegvars"]} '\
                    f'through one-way let expressions. Use bijective maps (BiMap) instead'
             if (not any([k in ctx['upper_tegvars'] for k in ctx['lower_tegvars']])) or (not ctx['lower_tegvars']):
-                # print(f'Not rewriting delta: {e} {ctx["upper_tegvars"]} {ctx["lower_tegvars"]}')
                 return Const(0), ctx
             else:
-                # while not is_delta_normal(e):
                 if not is_delta_normal(e):
-                    accepts = [handler.accept(e, set(ctx['upper_tegvars'])) for handler in HANDLERS]
-                    assert any(accepts), f'Cannot find any handler for delta expression {e}'
+                    can_rewrites = [handler.can_rewrite(e, set(ctx['upper_tegvars'])) for handler in HANDLERS]
+                    assert any(can_rewrites), f'Cannot find any handler for delta expression {e}'
 
-                    handler = HANDLERS[accepts.index(True)]
-                    # print(f'Rewriting delta: {e} {ctx["upper_tegvars"]}, with handler {handler.__name__}')
+                    handler = HANDLERS[can_rewrites.index(True)]
                     e = handler.rewrite(e, set(ctx['upper_tegvars']))
-                    # print(f'Rewritten delta: {e}')
                     e = normalize_deltas(e)  # Normalize further if necessary
 
                 return e, ctx
@@ -347,8 +292,6 @@ def reparameterize(bimap: BiMap, expr: ITeg):
     # find bimap and all superseding integrals
     # substitute for integrals, generate let exprs, multiply inv_jacobian
 
-    # TODO: Put bounds checks in there too.
-
     def inner_fn(e, ctx):
         if isinstance(e, Teg):
             return e, {'is_expr': bimap is e,
@@ -365,9 +308,6 @@ def reparameterize(bimap: BiMap, expr: ITeg):
 
     def outer_fn(e, ctx):
         if isinstance(e, BiMap) and (bimap is e):
-            # TODO: Temporary fix.
-            # assert all([k in ctx['upper_tegvars'] for k in e.sources]),\
-            #       f'Attempting to map non-Teg vars {e.sources}, {ctx["upper_tegvars"]}'
             if not all([k in ctx['upper_tegvars'] for k in e.sources]):
                 # BiMap is invalid, null everything.
                 print(f'WARNING: Attempting to map non-Teg vars {e.sources}, {ctx["upper_tegvars"]}')
@@ -376,12 +316,8 @@ def reparameterize(bimap: BiMap, expr: ITeg):
             bounds_checks = reduce(operator.and_,
                                    [(lb < dvar) & (ub > dvar) for (dvar, (lb, ub)) in ctx['source_bounds'].items()])
             reparamaterized_expr = IfElse(bounds_checks, e.expr * e.inv_jacobian, Const(0))
-            # print(f'\n\nREPLACING BIMAP WITH ')
-            # print(reparamaterized_expr)
-            # print('\n\n')
             return (reparamaterized_expr,
                     {**ctx,
-                     # 'teg_replace': {s: t for s, t in zip(e.sources, e.targets)},
                      'teg_sources': list(e.sources),
                      'teg_targets': list(e.targets),
                      'let_mappings': {s: sexpr for s, sexpr in zip(e.sources, e.source_exprs)},
@@ -389,12 +325,10 @@ def reparameterize(bimap: BiMap, expr: ITeg):
                      'target_upper_bounds': {t: tub for t, tub in zip(e.targets, e.target_upper_bounds)}
                      })
         elif isinstance(e, Teg):
-            # print(ctx)
 
             if e.dvar in ctx.get('teg_sources', {}):
                 ctx['teg_sources'].remove(e.dvar)
                 target_dvar = ctx['teg_targets'].pop()
-                # print(f'REPLACING TEG {e.dvar}')
                 placeholders = {
                     **{f'{svar.uid}_ub': upper for svar, (lower, upper) in ctx['source_bounds'].items()},
                     **{f'{svar.uid}_lb': lower for svar, (lower, upper) in ctx['source_bounds'].items()}
@@ -409,8 +343,6 @@ def reparameterize(bimap: BiMap, expr: ITeg):
                 e = e.body
 
                 if len(ctx['teg_sources']) == 0:
-                    # Last teg replacement.
-
                     # Add let mappings here.
                     source_vars, source_exprs = zip(*list(ctx['let_mappings'].items()))
                     e = LetIn(source_vars, source_exprs, e)
@@ -421,22 +353,12 @@ def reparameterize(bimap: BiMap, expr: ITeg):
 
                     # Add dependent mappings here.
                     for new_vars, new_exprs in ctx.get('dependent_mappings', []):
-                        # print(f'ADDING DEPENDENT MAPPING FOR: {new_vars}')
                         e = LetIn(new_vars, new_exprs, e)
                 return e, ctx
 
         elif isinstance(e, LetIn):
-            """
-            if e.new_vars[0].name == '__norm__':
-                print('FOUND NORM')
-                print(e)
-                print(ctx.get('teg_replace', {}))
-                print(ctx.get('let_mappings', {}))
-            """
 
             if len(ctx.get('teg_sources', {})) > 0:
-                # print(f'ENCOUNTERED LET {e.new_vars}')
-                # e contains expr
                 if (any([new_var in map_expr
                          for new_var in e.new_vars
                          for map_vars, map_exprs in ctx.get('dependent_mappings', [])
@@ -445,9 +367,6 @@ def reparameterize(bimap: BiMap, expr: ITeg):
                          for new_var in e.new_vars
                          for map_var, map_expr in ctx.get('let_mappings', {}).items()])):
                     # reparametrization is dependent on this let_map. lift this map.
-                    # print('\n\n\nDEPENDENT MAPPING')
-                    # print(f'{e.new_vars}\n\n\n')
-
                     ctx['dependent_mappings'] = [*ctx.get('dependent_mappings', []), (e.new_vars, e.new_exprs)]
                     return e.expr, ctx
 
@@ -476,7 +395,6 @@ def eliminate_bimaps(expr: ITeg):
     top_level_bimap = top_level_instance_of(expr, lambda a: isinstance(a, BiMap))
     if top_level_bimap is None:
         return expr
-    # print(f'Eliminating Bimap.. {id(top_level_bimap)}')
 
     top_level_delta_of_bimap = top_level_instance_of(top_level_bimap, lambda a: isinstance(a, Delta))
     if top_level_delta_of_bimap is None:
@@ -484,19 +402,11 @@ def eliminate_bimaps(expr: ITeg):
         return eliminate_bimaps(substitute_instance(expr, top_level_bimap, let_expr))
     else:
         linear_expr = split_instance(top_level_bimap, expr)
-        # print(f'\n\n\nBIMAP ELIMINATION (PRE-REMAP) {id(top_level_bimap)} {top_level_bimap.sources}:')
-        # print(expr)
         old_tree = substitute_instance(expr, top_level_bimap, Const(0))
         new_tree = tree_copy(reparameterize(top_level_bimap, linear_expr))
         e = old_tree + new_tree
 
-        # print('\n\n\nPOST-REMAP')
-        # print(old_tree)
-        # print('\n\n')
-        # print(new_tree)
-        # print('\n\n')
         return eliminate_bimaps(e)
-        # return eliminate_bimaps(simplify(old_tree)) + eliminate_bimaps(new_tree)
 
 
 def eliminate_deltas(expr: ITeg):
@@ -516,16 +426,13 @@ def eliminate_deltas(expr: ITeg):
         if isinstance(e, Delta) and (ctx['search_expr'] is e):
             assert is_delta_normal(e), f'Delta {e} is not in normal form. Call normalize_delta() first'
             if e.expr not in ctx['upper_tegvars']:
-                # print(f'Eliminating {e}, not covered by any integral: {ctx["upper_tegvars"]}')
                 return Const(0), ctx
             else:
-                # print(f'Eliminating {e}, covered by integral')
                 return Const(1), {**ctx,
                                   'eliminate_tegs': {**ctx['eliminate_tegs'], e.expr: Const(0)}}
 
         elif isinstance(e, Teg):
             if e.dvar in ctx['eliminate_tegs']:
-                # print(f'Eliminating integral associated with {e.dvar}')
                 value = ctx['eliminate_tegs'][e.dvar]
                 bounds_check = (e.lower < value) & (e.upper > value)
                 return (LetIn([e.dvar], [value], IfElse(bounds_check, e.body, Const(0))),

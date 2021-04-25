@@ -12,7 +12,6 @@ from .utils import overloads
 
 class SimpleCMath():
     def simple_c(input_symbol, output_symbol, c_gen_fn, **kwargs):
-        # input_size = input_symbol.irtype().size
         output_size = output_symbol.irtype().size
 
         if output_size == 1:

@@ -1,31 +1,12 @@
 """
 Reduce to base language.
 """
-
-from teg import (
-    ITeg
-)
-
-from teg.lang.extended_utils import (
-    is_base_language
-)
-
-from .delta import (
-    tree_copy,
-    normalize_deltas,
-    eliminate_bimaps,
-    eliminate_deltas
-)
-
-from .simplify import simplify
-
 import time
 
-from teg import (
-    ITeg, Var, LetIn, Tup, Const
-)
-from teg.passes.base import base_pass
-from teg.passes.substitute import substitute
+from teg import ITeg
+from teg.lang.extended_utils import is_base_language
+from .delta import tree_copy, normalize_deltas, eliminate_bimaps, eliminate_deltas
+from .simplify import simplify
 
 
 def reduce_to_base(expr: ITeg, timing=False):

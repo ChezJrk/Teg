@@ -64,9 +64,8 @@ def reverse_deriv_transform(expr: ITeg,
                             args: Dict[str, Any]) -> Iterable[Tuple[Tuple[str, int], ITeg]]:
 
     if isinstance(expr, TegVar):
-        # print({(v.name, v.uid) for v in extend_dependencies({expr}, deps)})
         if (((expr.name, expr.uid) not in not_ctx) or
-            {(v.name, v.uid) for v in extend_dependencies({expr}, deps)} - not_ctx):
+                {(v.name, v.uid) for v in extend_dependencies({expr}, deps)} - not_ctx):
             yield ((f'd{expr.name}', expr.uid), out_deriv_vals)
 
     elif isinstance(expr, (Const, Delta)):
@@ -108,7 +107,6 @@ def reverse_deriv_transform(expr: ITeg,
         yield from ((name_uid, out_deriv_vals * IfElse(expr.cond, Const(0), deriv_else))
                     for name_uid, deriv_else in derivs_else)
 
-        # print(not_ctx)
         if not args.get('ignore_deltas', False):
             for boolean in primitive_booleans_in(expr.cond, not_ctx, deps):
                 jump = substitute(expr, boolean, true) - substitute(expr, boolean, false)
@@ -130,25 +128,6 @@ def reverse_deriv_transform(expr: ITeg,
                         for name_uid, lower_deriv in lower_derivs)
 
         not_ctx.add((expr.dvar.name, expr.dvar.uid))
-
-        """
-        delta_set = rotated_delta_contribution(expr, not_ctx, deps | {(expr.dvar, expr.lower, expr.upper)})
-
-        for delta in delta_set:
-            delta_expr, distance_to_delta, remapping = delta
-            deriv_dist_to_delta = reverse_deriv_transform(distance_to_delta, Const(1), not_ctx, deps)
-            delta_deriv_parts = [(name_uid, deriv_expr) for name_uid, deriv_expr in deriv_dist_to_delta]
-
-            delta_deriv_dict = {}
-            for i in delta_deriv_parts:
-                delta_deriv_dict.setdefault(i[0], []).append(i[1])
-
-            delta_deriv_list = []
-            for (uid, exprs) in delta_deriv_dict.items():
-                delta_deriv_list.append((uid, remapping(delta_expr * out_deriv_vals * reduce(operator.add, exprs))))
-
-            yield from delta_deriv_list
-        """
 
         deriv_body_traces = reverse_deriv_transform(expr.body,
                                                     Const(1),
@@ -199,24 +178,17 @@ def reverse_deriv_transform(expr: ITeg,
         dnew_vars, body_derivs = set(), {}
         new_deps = {}
         for var, e in zip(expr.targets, expr.target_exprs):
-            # print(not_ctx)
-            # print(var, e)
             if any(Var(name=ctx_name, uid=ctx_uid) in e for ctx_name, ctx_uid in not_ctx):
                 # Add dependent variables.
                 assert isinstance(var, TegVar), f'{var} is dependent on TegVar(s):'\
                                                 f'({[ctx_var for ctx_var in not_ctx if ctx_var in e]}).'\
                                                 f'{var} must also be declared as a TegVar and not a Var'
-                # print(not_ctx)
                 not_ctx = not_ctx | {(var.name, var.uid)}
-            # print(var)
-            if var not in expr.expr:
-                # print('Not in expression')
-                continue
-            new_deps[var] = extract_vars(e)
-            # print('In expression')
-            dname = f'd{var.name}'
-            dnew_vars.add((dname, var.uid))
-            body_derivs[(dname, var.uid)] = list(reverse_deriv_transform(e, Const(1), not_ctx, deps, args))
+            if var in expr.expr:
+                new_deps[var] = extract_vars(e)
+                dname = f'd{var.name}'
+                dnew_vars.add((dname, var.uid))
+                body_derivs[(dname, var.uid)] = list(reverse_deriv_transform(e, Const(1), not_ctx, deps, args))
 
         deps = {**deps, **new_deps}
         # Thread through derivatives of each subexpression
@@ -237,21 +209,17 @@ def reverse_deriv_transform(expr: ITeg,
 
 
 def reverse_deriv(expr: ITeg, out_deriv_vals: Tup = None,
-                  output_list: Optional[List[Var]] = None, args: Dict[str, Any] = None) -> ITeg:
+                  output_list: Optional[List[Var]] = None,
+                  args: Dict[str, Any] = None) -> ITeg:
     """Computes the derivative of a given expression.
 
     Args:
         expr: The expression to compute the total derivative of.
         out_deriv_vals: A mapping from variable names to the values of corresponding infinitesimals.
+        args: Additional mappings for specifying alternative behavior such as 'ignore_deltas' and 'ignore_bounds'.
 
     Returns:
-        Teg: The reverse derivative expression.
-    """
-    """
-    def remap_all(expr: ITeg):
-        while is_remappable(expr):
-            expr = remap(expr)
-        return expr
+        ITeg: The reverse derivative expression in the extended language.
     """
 
     if out_deriv_vals is None:
@@ -276,7 +244,6 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup = None,
         uids = [var_uid for var_name, var_uid in partial_deriv_map.keys()]
         new_vars = [Var(var_name) for var_name, var_uid in partial_deriv_map.keys()]
         new_vals = [*partial_deriv_map.values()]
-        # new_vals = [e for e in new_vals]
 
         if output_list is not None:
             # Return requested list of outputs.
@@ -289,11 +256,7 @@ def reverse_deriv(expr: ITeg, out_deriv_vals: Tup = None,
             sorted_list.sort(key=lambda a: a[0])
             _, new_vars, new_vals = list(zip(*sorted_list))
 
-        # print('Reverse-mode list order: ', ''.join([str(var) + ', ' for var in new_vars]))
-
         assert len(new_vals) > 0, 'There must be variables to compute derivatives. '
-        # out_expr = Tup(*new_vars) if len(new_vars) > 1 else new_vars[0]
-        # derivs = LetIn(Tup(*new_vars), Tup(*new_vals), out_expr)
         return new_vars, (Tup(*new_vals) if len(new_vars) > 1 else new_vals[0])
 
     if len(out_deriv_vals) == 1:

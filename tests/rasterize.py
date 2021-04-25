@@ -1,20 +1,16 @@
 from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
+from tap import Tap
 
 from integrable_program import (
     ITeg,
-    Const,
     Var,
     IfElse,
     Teg,
-    Tup,
-    LetIn,
 )
 from teg.derivs import FwdDeriv
 from teg.eval import numpy_eval as evaluate
-from teg.passes.simplify import simplify
-from tap import Tap
 
 
 class Args(Tap):

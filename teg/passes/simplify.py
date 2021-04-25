@@ -13,25 +13,17 @@ from teg import (
     Teg,
     Tup,
     LetIn,
-    BiMap,
     Or,
     And,
     Bool,
     true,
     false,
 )
-
-from teg.lang.extended import (
-    Delta,
-    BiMap
-)
-
-# from teg.derivs import FwdDeriv, RevDeriv
-
+from teg.lang.extended import Delta, BiMap
 from teg.eval import evaluate as evaluate_base
 from teg.passes.substitute import substitute
-
 from functools import partial
+
 
 evaluate = partial(evaluate_base, backend='numpy')
 
@@ -39,9 +31,6 @@ evaluate = partial(evaluate_base, backend='numpy')
 def simplify(expr: ITeg) -> ITeg:
 
     if isinstance(expr, Var):
-        # return expr
-        # if hasattr(expr, "value") and expr.value is not None:
-        #    return Const(expr.value)
         return expr
 
     elif isinstance(expr, Add):
@@ -109,7 +98,6 @@ def simplify(expr: ITeg) -> ITeg:
 
         if isinstance(simple1, Mul) and isinstance(simple2, Mul):
             # Distribution.
-            # TODO: Account for second term to be t * '1'
             exprLL, exprLR = simple1.children
             exprRL, exprRR = simple2.children
 
@@ -153,14 +141,11 @@ def simplify(expr: ITeg) -> ITeg:
             const_nodes = [node for node in all_nodes if isinstance(node, Const)]
             other_nodes = [node for node in all_nodes if not isinstance(node, Const)]
 
-            # print('const_nodes: ', const_nodes)
-            # print('other_nodes: ', other_nodes)
             # No const nodes -> Reordering is pointless.
             if len(other_nodes) == len(all_nodes):
                 return simple1 * simple2
 
             # Compress const nodes.
-            # import ipdb; ipdb.set_trace()
             const_node = Const(evaluate(reduce(operator.mul, const_nodes)))
 
             # Re-order to front.
@@ -168,8 +153,6 @@ def simplify(expr: ITeg) -> ITeg:
                 simplified_nodes = other_nodes + [const_node]
             else:
                 simplified_nodes = other_nodes
-
-            # print('simplified: ', simplified_nodes)
 
             # Build tree in reverse (so const node is at top level)
             return reduce(operator.mul, simplified_nodes)
@@ -184,7 +167,6 @@ def simplify(expr: ITeg) -> ITeg:
 
     elif isinstance(expr, SmoothFunc):
         simple = simplify(expr.expr)
-        # print(f'Simplify: {type(expr)}({type(simple)}{simple}) -> {Const(evaluate(type(expr)(simple)))}')
         if isinstance(simple, Const):
             return Const(evaluate(type(expr)(simple)))
         return type(expr)(simplify(expr.expr))
@@ -213,10 +195,6 @@ def simplify(expr: ITeg) -> ITeg:
         return Tup(*(simplify(child) for child in expr))
 
     elif isinstance(expr, LetIn):
-        # TODO: TEMP
-        # if Var(name = "__norm__", uid = 26) in expr.new_vars or len(expr.new_vars) != 1:
-        #    return LetIn(expr.new_vars, Tup(*(simplify(e) for e in expr.new_exprs)), simplify(expr.expr))
-
         simplified_exprs = Tup(*(simplify(e) for e in expr.new_exprs))
         child_expr = simplify(expr.expr)
         vars_list = expr.new_vars
@@ -256,8 +234,6 @@ def simplify(expr: ITeg) -> ITeg:
     elif isinstance(expr, Delta):
         return Delta(simplify(expr.expr))
 
-    # elif isinstance(expr, (FwdDeriv, RevDeriv)):
-    #     return simplify(expr.deriv_expr)
     elif {'FwdDeriv', 'RevDeriv'} & {t.__name__ for t in type(expr).__mro__}:
         return simplify(expr.__getattribute__('deriv_expr'))
 
@@ -275,8 +251,6 @@ def simplify(expr: ITeg) -> ITeg:
             return left_expr
         if left_expr == false or right_expr == false:
             return false
-        if isinstance(left_expr, Const) and isinstance(right_expr, Const):
-            return Const(evaluate(And(simple1, simple2)))
         return And(left_expr, right_expr)
 
     elif isinstance(expr, Or):
@@ -287,21 +261,7 @@ def simplify(expr: ITeg) -> ITeg:
             return left_expr
         if left_expr == true or right_expr == true:
             return true
-        if isinstance(left_expr, Const) and isinstance(right_expr, Const):
-            return Const(evaluate(Or(simple1, simple2)))
         return Or(left_expr, right_expr)
 
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported simplify rule')
-
-    """
-    elif isinstance(expr, TegRemap):
-        return TegRemap(
-                        map=expr.map,
-                        expr=simplify(expr.expr),
-                        exprs=dict([(var, simplify(e)) for var, e in expr.exprs.items()]),
-                        lower_bounds=dict([(var, simplify(e)) for var, e in expr.lower_bounds.items()]),
-                        upper_bounds=dict([(var, simplify(e)) for var, e in expr.upper_bounds.items()]),
-                        source_bounds=expr.source_bounds
-                    )
-    """

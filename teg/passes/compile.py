@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from teg import (
     ITeg,
@@ -16,8 +16,6 @@ from teg import (
     Or,
     Invert,
 )
-# from teg.derivs import FwdDeriv, RevDeriv
-
 from teg.ir.instr import (
     IR_Instruction,
     IR_Symbol,
@@ -25,7 +23,6 @@ from teg.ir.instr import (
     IR_Variable,
     IR_Function,
     IR_Call,
-
     IR_Add,
     IR_Mul,
     IR_Divide,
@@ -35,8 +32,7 @@ from teg.ir.instr import (
     IR_Pack,
     IR_CompareLT,
     IR_LAnd,
-    IR_LOr,
-    IR_Assign
+    IR_LOr
 )
 
 
@@ -56,10 +52,9 @@ def to_ir(expr: ITeg) -> IR_Function:
     instr_list, out_symbol, free_symbols = _to_ir(expr, {})
     return IR_Function(instr_list, output=out_symbol,
                        inputs=make_unique(remove_literals(free_symbols.values())), label='main')
-# TODO: STOPPED HERE.
 
 
-def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], IR_Variable, Dict[str, IR_Symbol]):
+def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> Tuple[List[IR_Instruction], IR_Variable, Dict[str, IR_Symbol]]:
 
     if isinstance(expr, Const):
         return [], IR_Literal(value=expr.value), {}
@@ -151,9 +146,7 @@ def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], 
             all_instrs.extend(child_list)
             child_vars.append(child_var)
 
-        # child_lists, child_vars, child_symbols = zip(*[ for child in expr.children]) # Incorrect
         out_var = IR_Variable()
-        # print([str(child) for child in child_vars])
         return (all_instrs + [IR_Pack(output=out_var, inputs=child_vars)],
                 out_var,
                 all_free_symbols)
@@ -169,20 +162,9 @@ def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], 
             expr_vars.append(expr_var)
 
         new_symbols = {f'{var.name}_{var.uid}': symbol for var, symbol in zip(expr.new_vars, expr_vars)}
-                       # if not isinstance(symbol, IR_Literal)}
         ctx_symbols = {**symbols, **expr_free_symbols, **new_symbols}
 
         body_list, body_var, body_symbols = _to_ir(expr.expr, ctx_symbols)
-
-        # print(expr.new_vars)
-        # print(body_symbols.values())
-        # print(new_symbols.values())
-        """
-        for var, symbol in zip(expr.new_vars, expr_vars):
-            var_string = f'{var.name}_{var.uid}'
-            if isinstance(symbol, IR_Literal) and var_string in ctx_symbols.keys():
-                body_list = [IR_Assign(ctx_symbols[var_string], symbol), *body_list]
-        """
 
         body_fn = IR_Function(body_list, output=body_var,
                               inputs=make_unique(remove_literals(body_symbols.values())),
@@ -197,8 +179,6 @@ def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], 
                 {**expr_free_symbols,
                  **{label: symbol for label, symbol in body_symbols.items() if label not in new_symbols.keys()}})
 
-    # elif isinstance(expr, (FwdDeriv, RevDeriv)):
-    #     return _to_ir(expr.deriv_expr, symbols)
     elif {'FwdDeriv', 'RevDeriv'} & {t.__name__ for t in type(expr).__mro__}:
         return _to_ir(expr.__getattribute__('deriv_expr'), symbols)
 

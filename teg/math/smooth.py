@@ -1,6 +1,7 @@
 """
-    Declares popularly used smooth functions.
+    Declares commonly used smooth functions.
 """
+import numpy as np
 
 from teg import (
     ITeg,
@@ -9,13 +10,11 @@ from teg import (
     Invert,
 )
 
-import numpy as np
-
 
 class Sqrt(SmoothFunc):
-    """
-        y = sqrt(x)
-        TODO: Do we need bounds checks?
+    """y = sqrt(x)
+
+    NOTE: Does not check inputs are valid (x must be positive)
     """
     def __init__(self, expr: ITeg, name: str = "Sqrt"):
         super(Sqrt, self).__init__(expr=expr, name=name)
@@ -34,9 +33,7 @@ class Sqrt(SmoothFunc):
 
 
 class Sqr(SmoothFunc):
-    """
-        y = x**2
-    """
+    """y = x**2 """
     def __init__(self, expr: ITeg, name: str = "Sqr"):
         super(Sqr, self).__init__(expr=expr, name=name)
 
@@ -54,9 +51,7 @@ class Sqr(SmoothFunc):
 
 
 class Sin(SmoothFunc):
-    """
-        y = sin(x)
-    """
+    """y = sin(x) """
     def __init__(self, expr: ITeg, name: str = "Sin"):
         super(Sin, self).__init__(expr=expr, name=name)
 
@@ -74,9 +69,7 @@ class Sin(SmoothFunc):
 
 
 class Cos(SmoothFunc):
-    """
-        y = cos(x)
-    """
+    """y = cos(x)"""
     def __init__(self, expr: ITeg, name: str = "Cos"):
         super(Cos, self).__init__(expr=expr, name=name)
 
@@ -94,9 +87,7 @@ class Cos(SmoothFunc):
 
 
 class ASin(SmoothFunc):
-    """
-        theta = asin(x)
-    """
+    """theta = asin(x) """
     def __init__(self, expr: ITeg, name: str = "ASin"):
         super(ASin, self).__init__(expr=expr, name=name)
 
@@ -114,9 +105,7 @@ class ASin(SmoothFunc):
 
 
 class ATan2(SmoothFunc):
-    """
-        theta = atan2(x, y)
-    """
+    """theta = atan2(x, y) """
     def __init__(self, expr: ITeg, name: str = "ATan2"):
         super(ATan2, self).__init__(expr=expr, name=name)
 
