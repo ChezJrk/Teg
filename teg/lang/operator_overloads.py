@@ -397,10 +397,10 @@ class ITegBoolOverloads:
 class BoolOverloads:
 
     def __str__(self):
-        return f'{self.left_expr} < {self.right_expr}'
+        return f'{self.left_expr} <{"=" if self.allow_eq else ""} {self.right_expr}'
 
     def __repr__(self):
-        return f'Bool({repr(self.left_expr)}, {repr(self.right_expr)})'
+        return f'Bool({repr(self.left_expr)}, {repr(self.right_expr)}, {repr(self.allow_eq)})'
 
 
 @overloads(And)

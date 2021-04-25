@@ -36,6 +36,11 @@ class IR_CompareLT(IR_Binary):
         super(IR_CompareLT, self).__init__(output=output, input1=input1, input2=input2)
 
 
-class IR_CompareGT(IR_Binary):
+class IR_CompareLTE(IR_Binary):
+    def __init__(self, output, input1, input2):
+        super(IR_CompareLTE, self).__init__(output=output, input1=input1, input2=input2)
+
+
+class IR_CompareGT(IR_Binary):  # NOTE: This class is never instantiated?
     def __init__(self, output, input1, input2):
         super(IR_CompareGT, self).__init__(output=output, input1=input1, input2=input2)

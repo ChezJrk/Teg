@@ -34,6 +34,7 @@ from teg.ir.instr import (
     IR_Integrate,
     IR_Pack,
     IR_CompareLT,
+    IR_CompareLTE,
     IR_LAnd,
     IR_LOr,
     IR_Assign
@@ -228,7 +229,8 @@ def _to_ir(expr: ITeg, symbols: Dict[str, IR_Symbol]) -> (List[IR_Instruction], 
         elif isinstance(expr, Or):
             code = [*ir_left, *ir_right, IR_LOr(out_var, left_var, right_var)]
         elif isinstance(expr, Bool):
-            code = [*ir_left, *ir_right, IR_CompareLT(out_var, left_var, right_var)]
+            ir_class = IR_CompareLTE if expr.allow_eq else IR_CompareLT
+            code = [*ir_left, *ir_right, ir_class(out_var, left_var, right_var)]
 
         return code, out_var, {**left_symbols, **right_symbols}
 

@@ -9,6 +9,7 @@ from teg.ir.instr import (
 
     IR_Binary,
     IR_CompareLT,
+    IR_CompareLTE,
     IR_CompareGT,
     IR_LAnd,
     IR_LOr,
@@ -299,6 +300,12 @@ class CPass_CompareGT:
 class CPass_CompareLT:
     def __tegpass_c__(self, name_ctx, **kwargs):
         return self.__tegpass_c_binary__(name_ctx, op='<', **kwargs)
+
+
+@overloads(IR_CompareLTE)
+class CPass_CompareLTE:
+    def __tegpass_c__(self, name_ctx, **kwargs):
+        return self.__tegpass_c_binary__(name_ctx, op='<=', **kwargs)
 
 
 @overloads(IR_Add)
