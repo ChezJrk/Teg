@@ -116,7 +116,7 @@ class C_EvalMode(EvalMode):
 
         self.module_filename = f'{self.outfolder}/{self.module_name}'
 
-        compile_command = f"g++ -O3 -std=c++11 -fPIC {teg_runtime_includes} "\
+        compile_command = f"g -O3 -std=c++11 -fPIC {teg_runtime_includes} "\
                           f"{self.main_filename} -o {self.module_filename}"
         proc = subprocess.Popen(compile_command,
                                 stdout=subprocess.PIPE, shell=True)
@@ -233,7 +233,7 @@ class C_EvalMode_PyBind(EvalMode):
 
         self.module_filename = f'{self.outfolder}/{self.module_name}{extension_suffix}'
 
-        compile_command = f"g++ -O3 -shared -std=c++11 -fPIC {pybind_includes} {teg_runtime_includes} "\
+        compile_command = f"g -O3 -shared -std=c++11 -fPIC {pybind_includes} {teg_runtime_includes} "\
                           f"{self.pybind_filename} -o {self.module_filename}"
         proc = subprocess.Popen(compile_command,
                                 stdout=subprocess.PIPE, shell=True)
