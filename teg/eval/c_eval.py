@@ -116,7 +116,7 @@ class C_EvalMode(EvalMode):
 
         self.module_filename = f'{self.outfolder}/{self.module_name}'
 
-        compile_command = f"g -O3 -std=c++11 -fPIC {teg_runtime_includes} "\
+        compile_command = f"g++ -O3 -std=c++11 -fPIC {teg_runtime_includes} "\
                           f"{self.main_filename} -o {self.module_filename}"
         proc = subprocess.Popen(compile_command,
                                 stdout=subprocess.PIPE, shell=True)
@@ -179,7 +179,7 @@ class C_EvalMode_PyBind(EvalMode):
         if not os.path.exists(self.outfolder):
             os.mkdir(self.outfolder)
 
-        self.pybind_filename = self.outfolder + '/bind.c'
+        self.pybind_filename = self.outfolder + '/bind.cc'
         self.out_filename = self.outfolder + '/tegout.h'
         self.module_name = f'teg_jit_module_{C_EvalMode_PyBind._module_count_}'
         self.module_filename = None
@@ -197,7 +197,7 @@ class C_EvalMode_PyBind(EvalMode):
     def _make_pybind_file(self):
         fn_name, fn_body = self.funclist[-1]
 
-        _template_file = open(__data_path__ + '/templates/pybind.template.c', 'r')
+        _template_file = open(__data_path__ + '/templates/pybind.template.cc', 'r')
         template = _template_file.read()
         _template_file.close()
         pybind_template = CTemplateFunction(template, {
@@ -233,7 +233,7 @@ class C_EvalMode_PyBind(EvalMode):
 
         self.module_filename = f'{self.outfolder}/{self.module_name}{extension_suffix}'
 
-        compile_command = f"g -O3 -shared -std=c++11 -fPIC {pybind_includes} {teg_runtime_includes} "\
+        compile_command = f"g++ -O3 -shared -std=c++11 -fPIC {pybind_includes} {teg_runtime_includes} "\
                           f"{self.pybind_filename} -o {self.module_filename}"
         proc = subprocess.Popen(compile_command,
                                 stdout=subprocess.PIPE, shell=True)
