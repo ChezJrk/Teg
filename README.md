@@ -27,7 +27,7 @@ from teg.eval.numpy_eval import evaluate
 x, t = TegVar('x'), Var('t', 0.5)
 expr = Teg(0, 1, IfElse(x < t, 1, 0), x)
 deriv_expr = FwdDeriv(expr, [(t, 1)])
-print(evaluate(deriv_expr)) # prints 1
+print(evaluate(deriv_expr))  # prints 1
 ```
 
 ## Code Structure
