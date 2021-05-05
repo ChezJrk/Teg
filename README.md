@@ -15,9 +15,9 @@ pip install -e .
 ## Illustrative Example
 A minimal illustrative example is:
 
-![\frac{d}{dt} \int_{x = 0}^1 [x > t]](https://latex.codecogs.com/svg.latex?\frac{d}{dt}%20\int_{x%20=%200}^1%20[x%20%3E%20t])
+![\frac{d}{dt} \int_{x = 0}^1 [x < t]](https://latex.codecogs.com/svg.latex?\frac{d}{dt}%20\int_{x%20=%200}^1%20[x%20%3C%20t])
 
-This is the integral of a step discontinuity that jumps from 0 to 1 at ![](https://latex.codecogs.com/svg.latex?t).
+This is the integral of a step discontinuity that jumps from 1 to 0 at ![](https://latex.codecogs.com/svg.latex?t).
 If we set ![](https://latex.codecogs.com/svg.latex?t%20=%200.5), then the result is 1, but discretizing before computing the derivative as is standard in differentiable programming languages (e.g., PyTorch and TensorFlow) results in a derivative of 0. Our language correctly models the interaction between the integral and the parametric discontinuity. In our language the implementation for this simple function is:
 ```python
 from teg import TegVar, Var, Teg, IfElse
@@ -25,7 +25,7 @@ from teg.derivs import FwdDeriv
 from teg.eval.numpy_eval import evaluate
 
 x, t = TegVar('x'), Var('t', 0.5)
-expr = Teg(0, 1, IfElse(x > t, 0, 1), x)
+expr = Teg(0, 1, IfElse(x < t, 1, 0), x)
 deriv_expr = FwdDeriv(expr, [(t, 1)])
 print(evaluate(deriv_expr)) # prints 1
 ```
