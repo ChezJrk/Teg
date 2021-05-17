@@ -1,8 +1,6 @@
 # Teg
 
-Teg is a differentiable programming language that includes an integral primitive, which allows for soundly optimizing integrals with discontinuous integrands. This is a research artifact for the paper: **Systematically Optimizing Parametric Discontinuities**. This repository contains the core library implementation, while the applications can be found at [https://github.com/ChezJrk/teg_applications](https://github.com/ChezJrk/teg_applications). The applications include image stylization, fitting shader parameters, trajectory optimization, and optimizing physical designs.
-
-
+Teg is a differentiable programming language that includes an integral primitive, which allows for soundly optimizing integrals with discontinuous integrands. This is a research artifact for the paper: **[Systematically Optimizing Parametric Discontinuities](https://people.csail.mit.edu/sbangaru/projects/teg-2021/)**. This repository contains the core library implementation, while the applications can be found at [https://github.com/ChezJrk/teg_applications](https://github.com/ChezJrk/teg_applications). The applications include image stylization, fitting shader parameters, trajectory optimization, and optimizing physical designs.
 
 ## Installation Instructions
 Teg requires Python 3.6+. To install Teg run:
@@ -44,3 +42,17 @@ We have a `test` folder with all of the systems tests.
 ## Compiling to C
 It is possible to compile Teg programs to C using `python3 -m teg --compile --target C [[FILE NAME]].py`. See `teg/__main__.py` for more options.
 To specify C compilation flags, use `python3 -m teg --include-options`.
+
+## Citation
+```
+@article{BangaruMichel2021DiscontinuousAutodiff,
+  title = {Systematically Differentiating Parametric Discontinuities},
+  author = {Bangaru, Sai and Michel, Jesse and Mu, Kevin and Bernstein, Gilbert and Li, Tzu-Mao and Ragan-Kelley, Jonathan},
+  journal = {ACM Trans. Graph.},
+  volume = {40},
+  number = {107}, 
+  pages = {107:1-107:17},
+  year = {2021},
+  publisher = {ACM},
+}
+```
