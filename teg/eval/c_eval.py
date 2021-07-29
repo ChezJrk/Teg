@@ -267,7 +267,7 @@ class C_EvalMode_PyBind(EvalMode):
             # Cannot remove on Windows while loaded.
             os.remove(self.module_filename)
             os.remove(self.pybind_filename)
-
+    
         self.loaded = True
 
     def eval(self, bindings={}, **kwargs):

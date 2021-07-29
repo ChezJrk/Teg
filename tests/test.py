@@ -29,7 +29,7 @@ from teg.derivs.reverse_deriv import reverse_deriv
 from teg.passes.simplify import simplify
 from teg.passes.reduce import reduce_to_base
 from teg.passes.delta import split_expr, split_exprs, split_instance
-from teg.eval import evaluate as _evaluate
+from teg.eval import evaluate
 from teg.maps.polar import polar_2d_map
 from teg.maps.transform import scale, translate
 from teg.maps.smoothstep import smoothstep
@@ -69,8 +69,6 @@ def evaluate(*args, **kwargs):
         return evaluate_numpy(*args, **kwargs)
 """
 
-from functools import partial
-evaluate = partial(_evaluate, backend='C_PyBind')
 
 # TODO: move to test utils later.
 def finite_difference(expr, var, delta=0.004, num_samples=10000, silent=True, **kwargs):
