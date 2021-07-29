@@ -7,7 +7,7 @@ from teg.ir.passes.to_c import to_c, convert_output_to_target
 from teg.ir.passes.to_c import CTemplateFunction
 
 from teg import ITeg
-from teg import __data_path__, __include_path__
+from teg import __data_path__, __include_path__, __temp_path__
 
 from .eval_mode import EvalMode
 
@@ -36,12 +36,12 @@ class C_EvalMode(EvalMode):
 
         assert len(self.funclist) > 0, 'Code generation failed. Cannot find any routines'
 
-        self.outfolder = '/tmp/teg_cpp'
+        self.outfolder = f'{__temp_path__}{os.path.sep}teg_cpp'
         if not os.path.exists(self.outfolder):
             os.mkdir(self.outfolder)
 
-        self.main_filename = self.outfolder + f'/main_{C_EvalMode._module_count_}.cc'
-        self.out_filename = self.outfolder + f'/tegout_{C_EvalMode._module_count_}.h'
+        self.main_filename = self.outfolder + f'{os.path.sep}main_{C_EvalMode._module_count_}.cc'
+        self.out_filename = self.outfolder + f'{os.path.sep}tegout_{C_EvalMode._module_count_}.h'
         self.module_name = f'teg_jit_module_{C_EvalMode._module_count_}'
         self.module_filename = None
 
@@ -175,12 +175,12 @@ class C_EvalMode_PyBind(EvalMode):
 
         assert len(self.funclist) > 0, 'Code generation failed. Cannot find any routines'
 
-        self.outfolder = '/tmp/teg_cpp'
+        self.outfolder = f'{__temp_path__}{os.path.sep}teg_cpp'
         if not os.path.exists(self.outfolder):
             os.mkdir(self.outfolder)
 
-        self.pybind_filename = self.outfolder + '/bind.cc'
-        self.out_filename = self.outfolder + '/tegout.h'
+        self.pybind_filename = self.outfolder + f'{os.path.sep}bind.cc'
+        self.out_filename = self.outfolder + f'{os.path.sep}tegout.h'
         self.module_name = f'teg_jit_module_{C_EvalMode_PyBind._module_count_}'
         self.module_filename = None
 
@@ -197,7 +197,7 @@ class C_EvalMode_PyBind(EvalMode):
     def _make_pybind_file(self):
         fn_name, fn_body = self.funclist[-1]
 
-        _template_file = open(__data_path__ + '/templates/pybind.template.cc', 'r')
+        _template_file = open(__data_path__ + f'{os.path.sep}templates{os.path.sep}pybind.template.cc', 'r')
         template = _template_file.read()
         _template_file.close()
         pybind_template = CTemplateFunction(template, {

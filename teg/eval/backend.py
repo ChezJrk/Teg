@@ -31,8 +31,9 @@ def evaluate(expr: ITeg, bindings=None, backend=None, **kwargs) -> float:
     # NOTE: Replace with priorities if we use more modes later..
     backend = 'C' if backend is None else backend
 
+    # TODO: This doesn't look like an airtight cache check..
     if backend not in expr.mode_cache.keys() or\
-       not all([(key, value) in expr.mode_options.items() for key, value in kwargs.items()]):
+       not all([(key, value) in expr.mode_options.items() for key, value in kwargs.items()]): 
         backend_cls, backend_kwargs = BACKENDS[backend]
         mode = backend_cls(expr, **kwargs, **backend_kwargs)
         expr.mode_cache[backend] = mode

@@ -1,5 +1,6 @@
 import subprocess
-
+import os
+from teg import __temp_path__
 
 def runProgram(program, silent=False):
     prog_name, out_size = program
@@ -43,11 +44,11 @@ def compileProgram(program, silent=True):
     header_code = '#include <iostream>\n' + '#include <math.h>\n'
 
     all_code = header_code + code + main_code
-    cppfile = open('/tmp/_teg_cpp_out.cpp', 'w')
+    cppfile = open(f'{__temp_path__}{os.path.sep}_teg_cpp_out.cpp', 'w')
     cppfile.write(all_code)
     cppfile.close()
 
-    filename = '/tmp/_teg_cpp_out'
+    filename = f'{__temp_path__}{os.path.sep}_teg_cpp_out'
     proc = subprocess.Popen(f'g++ -std=c++11 {filename}.cpp -o {filename} -O3', stdout=subprocess.PIPE, shell=True)
     (out, err) = proc.communicate()
 

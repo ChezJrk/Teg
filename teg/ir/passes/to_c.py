@@ -387,9 +387,9 @@ class CPass_Pack:
 
 
 _INTEGRATOR_MAP = {
-        'trapezoidal_quadrature': 'trapezoid_rule.template.c',
-        'rectangular_quadrature': 'rectangular_rule.template.c',
-        'monte_carlo_uniform': 'monte_carlo.template.c'
+        'rectangular_quadrature': 'rectangular_rule.template.cc',
+        'trapezoidal_quadrature': 'trapezoid_rule.template.cc', # Doesn't exist yet
+        'monte_carlo_uniform': 'monte_carlo.template.cc' # Doesn't exist yet
     }
 
 
