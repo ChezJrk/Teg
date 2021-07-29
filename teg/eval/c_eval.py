@@ -1,4 +1,5 @@
 import os
+import sysconfig
 import subprocess
 import importlib
 
@@ -113,8 +114,11 @@ class C_EvalMode(EvalMode):
 
     def _compile(self):
         teg_runtime_includes = f'-I{__include_path__}'
+        
+        EXTENSIONS = {'nt': '.exe', 'posix': ''}
+        assert os.name in EXTENSIONS.keys(), f'OS {os.name} not supported'
 
-        self.module_filename = f'{self.outfolder}/{self.module_name}'
+        self.module_filename = f'{self.outfolder}{os.path.sep}{self.module_name}{EXTENSIONS[os.name]}'
 
         compile_command = f"g++ -O3 -std=c++11 -fPIC {teg_runtime_includes} "\
                           f"{self.main_filename} -o {self.module_filename}"
@@ -201,7 +205,7 @@ class C_EvalMode_PyBind(EvalMode):
         template = _template_file.read()
         _template_file.close()
         pybind_template = CTemplateFunction(template, {
-                                        r'%C_FILENAME%': self.out_filename,
+                                        r'%C_FILENAME%': self.out_filename.replace('\\', '/'),
                                         r'%FN_PYTHON_NAME%': 'eval',
                                         r'%FN_C_NAME%': fn_name,
                                         r'%MODULE_NAME%': self.module_name
@@ -227,14 +231,21 @@ class C_EvalMode_PyBind(EvalMode):
         self.preprocessed = True
 
     def _compile(self):
-        pybind_includes = _get_command_result('python3 -m pybind11 --includes').rstrip()
+        pybind_includes = _get_command_result('python -m pybind11 --includes').rstrip()
         teg_runtime_includes = f'-I{__include_path__}'
-        extension_suffix = _get_command_result('python3-config --extension-suffix').rstrip()
+        extension_suffix = sysconfig.get_config_var('EXT_SUFFIX')
 
-        self.module_filename = f'{self.outfolder}/{self.module_name}{extension_suffix}'
+        self.module_filename = f'{self.outfolder}{os.path.sep}{self.module_name}{extension_suffix}'
+        
+        if os.name == 'nt':
+            # Explicitly link to python libraries on windows (requires MINGW)
+            python_libraries = f"-L{sysconfig.get_config_var('prefix')}/libs -lpython{sysconfig.get_config_var('py_version_nodot')}"
+        else:
+            python_libraries = ''
 
         compile_command = f"g++ -O3 -shared -std=c++11 -fPIC {pybind_includes} {teg_runtime_includes} "\
-                          f"{self.pybind_filename} -o {self.module_filename}"
+                          f"{self.pybind_filename} {python_libraries} -o {self.module_filename}"
+
         proc = subprocess.Popen(compile_command,
                                 stdout=subprocess.PIPE, shell=True)
 
@@ -252,9 +263,11 @@ class C_EvalMode_PyBind(EvalMode):
         self.module = code_module
 
         # Clean up to prevent bloat.
-        os.remove(self.module_filename)
-        os.remove(self.pybind_filename)
-        # os.remove(self.out_filename)
+        if os.name != 'nt':
+            # Cannot remove on Windows while loaded.
+            os.remove(self.module_filename)
+            os.remove(self.pybind_filename)
+
         self.loaded = True
 
     def eval(self, bindings={}, **kwargs):
