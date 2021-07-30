@@ -34,6 +34,10 @@ class Numpy_EvalMode(EvalMode):
 
         return evaluate(self.expr, ignore_cache=True, **self.options)
 
+    @staticmethod
+    def assert_is_available(**kwargs):
+        pass
+
 
 def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
 

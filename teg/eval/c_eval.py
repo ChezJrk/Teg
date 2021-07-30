@@ -1,4 +1,6 @@
 import os
+import sys
+import shutil
 import sysconfig
 import subprocess
 import importlib
@@ -18,6 +20,16 @@ def _get_command_result(command):
     output = proc.read()
     proc.close()
     return output
+
+def _assert_gcc_is_available():
+    gcc_help_strings = {
+        'linux': 'Please install the \'build-essential\' package through your package manager',
+        'linux2': 'Please install the \'build-essential\' package through your package manager',
+        'darwin': 'Please install Xcode command line tools',
+        'win32': 'Please install MinGW-W64'
+    }
+    assert shutil.which('g++') is not None,\
+            f'Couldn\'t find gcc. {gcc_help_strings.get(sys.platform, "")}'
 
 
 class C_EvalMode(EvalMode):
@@ -159,6 +171,10 @@ class C_EvalMode(EvalMode):
             return floatlines
         else:
             return float(out.rstrip())
+    
+    @staticmethod
+    def assert_is_available(**kwargs):
+        _assert_gcc_is_available()
 
 
 class C_EvalMode_PyBind(EvalMode):
@@ -287,3 +303,7 @@ class C_EvalMode_PyBind(EvalMode):
         output = self.module.eval(*args)
         assert output is not None, f'Eval failed with inputs: {args}'
         return output
+
+    @staticmethod
+    def assert_is_available(**kwargs):
+        _assert_gcc_is_available()
