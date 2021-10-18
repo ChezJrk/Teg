@@ -23,6 +23,8 @@ setuptools.setup(
     python_requires='>=3.6',
     install_requires=[
         'pybind11',
-        'numpy>=1.14.5'
+        'numpy>=1.14.5',
+        'typed-argument-parser',
+        'pypng'
     ]
 )

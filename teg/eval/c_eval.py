@@ -1,6 +1,6 @@
 import os
 import subprocess
-import importlib
+import importlib.util
 
 from teg.passes.compile import to_ir
 from teg.ir.passes.to_c import to_c, convert_output_to_target
