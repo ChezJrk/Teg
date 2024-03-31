@@ -1,32 +1,15 @@
 import numpy as np
 
-from teg import (
-    ITeg,
-    Const,
-    Var,
-    Add,
-    Mul,
-    IfElse,
-    Teg,
-    Tup,
-    LetIn,
-    Bool,
-    And,
-    Or,
-    Invert,
-    SmoothFunc
-)
+from teg import ITeg, Const, Var, Add, Mul, IfElse, Teg, Tup, LetIn, Bool, And, Or, Invert, SmoothFunc
 
 from .eval_mode import EvalMode
 
 
 class Numpy_EvalMode(EvalMode):
     def __init__(self, expr: ITeg, num_samples=50):
-        super(Numpy_EvalMode, self).__init__(name='numpy')
+        super(Numpy_EvalMode, self).__init__(name="numpy")
         self.expr = expr
-        self.options = {
-            "num_samples": num_samples
-        }
+        self.options = {"num_samples": num_samples}
 
     def eval(self, bindings={}, **kwargs):
         for var, value in bindings.items():
@@ -75,9 +58,9 @@ def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
 
         # Hacky way to handle integrals of vectors
         try:
-            body_at_samples = np.vectorize(compute_samples, otypes=[np.float])(var_samples)
+            body_at_samples = np.vectorize(compute_samples, otypes=[np.float64])(var_samples)
         except ValueError:
-            body_at_samples = np.vectorize(compute_samples, signature='()->(n)')(var_samples)
+            body_at_samples = np.vectorize(compute_samples, signature="()->(n)")(var_samples)
 
         # Trapezoidal rule
         y_left = body_at_samples[:-1]  # left endpoints
@@ -95,8 +78,8 @@ def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
 
     # elif isinstance(expr, (FwdDeriv, RevDeriv)):
     #    expr.value = evaluate(expr.deriv_expr, num_samples, ignore_cache)
-    elif {'FwdDeriv', 'RevDeriv'} & {t.__name__ for t in type(expr).__mro__}:
-        expr.value = evaluate(expr.__getattribute__('deriv_expr'), num_samples, ignore_cache)
+    elif {"FwdDeriv", "RevDeriv"} & {t.__name__ for t in type(expr).__mro__}:
+        expr.value = evaluate(expr.__getattribute__("deriv_expr"), num_samples, ignore_cache)
 
     elif isinstance(expr, Bool):
         left_val = evaluate(expr.left_expr, num_samples, ignore_cache)
@@ -116,5 +99,5 @@ def evaluate(expr: ITeg, num_samples: int = 50, ignore_cache: bool = False):
     else:
         raise ValueError(f'The type of the expr "{type(expr)}" does not have a supported derivative.')
 
-    assert expr.value is not None, f'Error evaluating expression {expr}'
+    assert expr.value is not None, f"Error evaluating expression {expr}"
     return expr.value

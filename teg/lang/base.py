@@ -4,7 +4,7 @@ import numpy as np
 
 
 def try_making_teg_const(x):
-    if type(x) in (int, float, np.int64, np.float, np.float64):
+    if type(x) in (int, float, np.int64, np.float64):
         x = Const(x)
     return x
 
@@ -17,11 +17,11 @@ class ITeg:
         self.children = children
 
         for child in self.children:
-            assert isinstance(child, ITeg), f'Non-ITeg expression {child} cannot be used in graph.'
+            assert isinstance(child, ITeg), f"Non-ITeg expression {child} cannot be used in graph."
 
         self.value = None
 
-    def bind_variable(self, var: 'Var', value: Optional[float] = None) -> None:
+    def bind_variable(self, var: "Var", value: Optional[float] = None) -> None:
         for child in self.children:
             child.bind_variable(var, value)
 
@@ -43,14 +43,14 @@ class Var(PiecewiseAffine):
         else:
             self.uid = uid
 
-    def bind_variable(self, var: 'Var', value: Optional[float] = None) -> None:
+    def bind_variable(self, var: "Var", value: Optional[float] = None) -> None:
         if (self.name, self.uid) == (var.name, var.uid):
             self.value = value
 
 
 class Const(Var):
 
-    def __init__(self, value: Optional[float], name: str = ''):
+    def __init__(self, value: Optional[float], name: str = ""):
         super(Const, self).__init__(name=name, value=value)
 
     def bind_variable(self, var: Var, value: Optional[float] = None) -> None:
@@ -59,10 +59,11 @@ class Const(Var):
 
 class SmoothFunc(ITeg):
     """
-        Arbitrary smooth function of one variable with symbolically defined derivatives.
-        SmoothFunc is an abstract class that children must implement.
+    Arbitrary smooth function of one variable with symbolically defined derivatives.
+    SmoothFunc is an abstract class that children must implement.
     """
-    def __init__(self, expr: ITeg, name: str = 'SmoothFunc'):
+
+    def __init__(self, expr: ITeg, name: str = "SmoothFunc"):
         super(SmoothFunc, self).__init__(children=[try_making_teg_const(expr)])
         self.expr = self.children[0]
         self.name = name
@@ -78,12 +79,12 @@ class SmoothFunc(ITeg):
 
 
 class Add(PiecewiseAffine):
-    name = 'add'
+    name = "add"
     operation = operator.add
 
 
 class Mul(PiecewiseAffine):
-    name = 'mul'
+    name = "mul"
     operation = operator.mul
 
 
@@ -96,11 +97,11 @@ class Invert(ITeg):
 
 class IfElse(ITeg):
 
-    def __init__(self, cond: 'ITegBool', if_body: ITeg, else_body: ITeg):
+    def __init__(self, cond: "ITegBool", if_body: ITeg, else_body: ITeg):
         super(IfElse, self).__init__(children=[try_making_teg_const(e) for e in (cond, if_body, else_body)])
         self.cond, self.if_body, self.else_body = self.children
 
-    def bind_variable(self, var: 'Var', value: Optional[float] = None) -> None:
+    def bind_variable(self, var: "Var", value: Optional[float] = None) -> None:
         self.cond.bind_variable(var, value)
         for child in self.children:
             child.bind_variable(var, value)
@@ -114,10 +115,7 @@ class Tup(ITeg):
 
 class LetIn(ITeg):
 
-    def __init__(self,
-                 new_vars: Tup,
-                 new_exprs: Tup,
-                 expr: ITeg):
+    def __init__(self, new_vars: Tup, new_exprs: Tup, expr: ITeg):
         super(LetIn, self).__init__(children=[try_making_teg_const(e) for e in (expr, *new_exprs)])
         self.new_vars = new_vars
         self.new_exprs = self.children[1:]
@@ -134,10 +132,11 @@ class Func(ITeg):
 
 
 class Ctx(dict):
-    """Mapping from strings to TegVariables. """
+    """Mapping from strings to TegVariables."""
+
     global_uid = 0
 
-    def __init__(self, env: Optional[Dict[str, Any]] = None, parent: Optional['TegContext'] = None):
+    def __init__(self, env: Optional[Dict[str, Any]] = None, parent: Optional["TegContext"] = None):
         self.uid = Ctx.global_uid
         Ctx.global_uid += 1
         super().update({} if env is None else env)
@@ -158,7 +157,7 @@ class ITegBool(ITeg):
         super(ITegBool, self).__init__(*args, **kwargs)
         self.value = None
 
-    def bind_variable(self, var: 'Var', value: Optional[float] = None) -> None:
+    def bind_variable(self, var: "Var", value: Optional[float] = None) -> None:
         self.left_expr.bind_variable(var, value)
         self.right_expr.bind_variable(var, value)
 
