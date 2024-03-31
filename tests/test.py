@@ -103,7 +103,7 @@ def check_nested_lists(self, results, expected, places=7):
         if isinstance(res, (list, np.ndarray)):
             check_nested_lists(self, res, exp, places)
         else:
-            t = (int, float, np.int64, np.float)
+            t = (int, float, np.int64, np.float64)
             err = f'Result {res} of type {type(res)} and expected {exp} of type {type(exp)}'
             assert isinstance(res, t) and isinstance(exp, t), err
             self.assertAlmostEqual(res, exp, places)
