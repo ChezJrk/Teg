@@ -1,6 +1,6 @@
 # Teg
 
-Teg is a differentiable programming language that includes an integral primitive, which allows for soundly optimizing integrals with discontinuous integrands. This is a research artifact for the paper: **[Systematically Optimizing Parametric Discontinuities](https://people.csail.mit.edu/sbangaru/projects/teg-2021/)**. This repository contains the core library implementation, while the applications can be found at [https://github.com/ChezJrk/teg_applications](https://github.com/ChezJrk/teg_applications). The applications include image stylization, fitting shader parameters, trajectory optimization, and optimizing physical designs.
+Teg is a differentiable programming language that includes an integral primitive, which allows for soundly optimizing integrals with discontinuous integrands. This is a research artifact for the paper: **[Systematically Differentiating Parametric Discontinuities](https://people.csail.mit.edu/sbangaru/projects/teg-2021/)**. This repository contains the core library implementation, while the applications can be found at [https://github.com/ChezJrk/teg_applications](https://github.com/ChezJrk/teg_applications). The applications include image stylization, fitting shader parameters, trajectory optimization, and optimizing physical designs.
 
 ## Installation Instructions
 Teg requires Python 3.6+. To install Teg run:
